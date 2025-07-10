@@ -87,6 +87,10 @@ enum QualityCommands {
     #[command(name = "input:add")]
     AddInput,
     
+    /// List design inputs
+    #[command(name = "input:list")]
+    ListInputs,
+    
     /// Link input to requirement
     #[command(name = "input:link-req")]
     LinkInputToRequirement,
@@ -95,17 +99,49 @@ enum QualityCommands {
     #[command(name = "output:add")]
     AddOutput,
     
+    /// List design outputs
+    #[command(name = "output:list")]
+    ListOutputs,
+    
+    /// Link output to requirement
+    #[command(name = "output:link-req")]
+    LinkOutputToRequirement,
+    
+    /// Link output to input
+    #[command(name = "output:link-input")]
+    LinkOutputToInput,
+    
     /// Add a design control
     #[command(name = "control:add")]
     AddControl,
+    
+    /// List design controls
+    #[command(name = "control:list")]
+    ListControls,
+    
+    /// Link control to output
+    #[command(name = "control:link-output")]
+    LinkControlToOutput,
     
     /// Add a risk
     #[command(name = "risk:add")]
     AddRisk,
     
+    /// List risks
+    #[command(name = "risk:list")]
+    ListRisks,
+    
     /// Assess project risks
     #[command(name = "risk:assess")]
     AssessRisks,
+    
+    /// Traceability matrix
+    #[command(name = "trace:matrix")]
+    TraceabilityMatrix,
+    
+    /// Risk scoring tools
+    #[command(name = "risk:score")]
+    RiskScoring,
     
     /// Quality dashboard
     Dashboard,

@@ -5,9 +5,11 @@
         description: "this is a test input",
         input_type: Specification,
         source: "test req",
-        requirements: [],
+        requirements: [
+            ("54511071-8d45-4996-8d10-ec251391190e"),
+        ],
         created: "2025-07-10T19:47:06.845245635Z",
-        updated: "2025-07-10T19:47:06.845245635Z",
+        updated: "2025-07-10T20:46:11.541633539Z",
         metadata: {},
     ),
     (
@@ -19,6 +21,17 @@
         requirements: [],
         created: "2025-07-10T20:31:16.692802965Z",
         updated: "2025-07-10T20:31:16.692802965Z",
+        metadata: {},
+    ),
+    (
+        id: ("7a07689a-e080-4926-9d60-8356a5cb2124"),
+        name: "test input 2",
+        description: "also a test input",
+        input_type: Standard,
+        source: "what?",
+        requirements: [],
+        created: "2025-07-10T20:45:59.938681156Z",
+        updated: "2025-07-10T20:45:59.938681156Z",
         metadata: {},
     ),
 ]

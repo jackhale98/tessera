@@ -10,11 +10,20 @@ pub async fn execute_quality_command(command: QualityCommands, project_ctx: Proj
         QualityCommands::AddRequirement => add_requirement_interactive(project_ctx).await,
         QualityCommands::ListRequirements => list_requirements(project_ctx).await,
         QualityCommands::AddInput => add_input_interactive(project_ctx).await,
+        QualityCommands::ListInputs => list_inputs(project_ctx).await,
         QualityCommands::LinkInputToRequirement => link_input_to_requirement_interactive(project_ctx).await,
         QualityCommands::AddOutput => add_output_interactive(project_ctx).await,
+        QualityCommands::ListOutputs => list_outputs(project_ctx).await,
+        QualityCommands::LinkOutputToRequirement => link_output_to_requirement_interactive(project_ctx).await,
+        QualityCommands::LinkOutputToInput => link_output_to_input_interactive(project_ctx).await,
         QualityCommands::AddControl => add_control_interactive(project_ctx).await,
+        QualityCommands::ListControls => list_controls(project_ctx).await,
+        QualityCommands::LinkControlToOutput => link_control_to_output_interactive(project_ctx).await,
         QualityCommands::AddRisk => add_risk_interactive(project_ctx).await,
+        QualityCommands::ListRisks => list_risks(project_ctx).await,
         QualityCommands::AssessRisks => assess_risks(project_ctx).await,
+        QualityCommands::TraceabilityMatrix => run_traceability_matrix(project_ctx).await,
+        QualityCommands::RiskScoring => run_risk_scoring(project_ctx).await,
         QualityCommands::Dashboard => show_quality_dashboard(project_ctx).await,
     }
 }
@@ -517,4 +526,340 @@ async fn show_quality_dashboard(project_ctx: ProjectContext) -> Result<()> {
     }
     
     Ok(())
+}
+
+async fn list_inputs(project_ctx: ProjectContext) -> Result<()> {
+    let quality_dir = project_ctx.module_path("quality");
+    let repo = QualityRepository::load_from_directory(&quality_dir)?;
+    let inputs = repo.get_inputs();
+    
+    if inputs.is_empty() {
+        println!("{}", "No design inputs found".yellow());
+        return Ok(());
+    }
+    
+    println!("{}", "Design Inputs".bold().blue());
+    
+    let mut table = Table::new();
+    table.set_header(vec!["ID", "Name", "Type", "Source", "Requirements"]);
+    
+    for input in inputs {
+        let input_type = match &input.input_type {
+            InputType::Specification => "Specification",
+            InputType::Standard => "Standard",
+            InputType::Regulation => "Regulation",
+            InputType::CustomerRequirement => "Customer Req",
+            InputType::MarketResearch => "Market Research",
+            InputType::TechnicalReport => "Tech Report",
+            InputType::Other(name) => name,
+        };
+        
+        table.add_row(vec![
+            input.id.to_string(),
+            truncate_string(&input.name, 25),
+            input_type.to_string(),
+            truncate_string(&input.source, 20),
+            input.requirements.len().to_string(),
+        ]);
+    }
+    
+    println!("{}", table);
+    Ok(())
+}
+
+async fn list_outputs(project_ctx: ProjectContext) -> Result<()> {
+    let quality_dir = project_ctx.module_path("quality");
+    let repo = QualityRepository::load_from_directory(&quality_dir)?;
+    let outputs = repo.get_outputs();
+    
+    if outputs.is_empty() {
+        println!("{}", "No design outputs found".yellow());
+        return Ok(());
+    }
+    
+    println!("{}", "Design Outputs".bold().blue());
+    
+    let mut table = Table::new();
+    table.set_header(vec!["ID", "Name", "Type", "Requirements", "Inputs"]);
+    
+    for output in outputs {
+        let output_type = match &output.output_type {
+            OutputType::Drawing => "Drawing",
+            OutputType::Calculation => "Calculation",
+            OutputType::Specification => "Specification",
+            OutputType::Report => "Report",
+            OutputType::Model => "Model",
+            OutputType::Prototype => "Prototype",
+            OutputType::TestPlan => "Test Plan",
+            OutputType::Other(name) => name,
+        };
+        
+        table.add_row(vec![
+            output.id.to_string(),
+            truncate_string(&output.name, 25),
+            output_type.to_string(),
+            output.requirements.len().to_string(),
+            output.inputs.len().to_string(),
+        ]);
+    }
+    
+    println!("{}", table);
+    Ok(())
+}
+
+async fn list_controls(project_ctx: ProjectContext) -> Result<()> {
+    let quality_dir = project_ctx.module_path("quality");
+    let repo = QualityRepository::load_from_directory(&quality_dir)?;
+    let controls = repo.get_controls();
+    
+    if controls.is_empty() {
+        println!("{}", "No design controls found".yellow());
+        return Ok(());
+    }
+    
+    println!("{}", "Design Controls".bold().blue());
+    
+    let mut table = Table::new();
+    table.set_header(vec!["ID", "Name", "Type", "Frequency", "Outputs"]);
+    
+    for control in controls {
+        let control_type = match &control.control_type {
+            ControlType::Review => "Review",
+            ControlType::Inspection => "Inspection",
+            ControlType::Test => "Test",
+            ControlType::Verification => "Verification",
+            ControlType::Validation => "Validation",
+            ControlType::Approval => "Approval",
+            ControlType::Other(name) => name,
+        };
+        
+        let frequency = match control.frequency {
+            ControlFrequency::OneTime => "One Time",
+            ControlFrequency::PerBatch => "Per Batch",
+            ControlFrequency::Daily => "Daily",
+            ControlFrequency::Weekly => "Weekly",
+            ControlFrequency::Monthly => "Monthly",
+            ControlFrequency::Quarterly => "Quarterly",
+            ControlFrequency::Annually => "Annually",
+            ControlFrequency::AsNeeded => "As Needed",
+        };
+        
+        table.add_row(vec![
+            control.id.to_string(),
+            truncate_string(&control.name, 25),
+            control_type.to_string(),
+            frequency.to_string(),
+            control.outputs.len().to_string(),
+        ]);
+    }
+    
+    println!("{}", table);
+    Ok(())
+}
+
+async fn list_risks(project_ctx: ProjectContext) -> Result<()> {
+    let quality_dir = project_ctx.module_path("quality");
+    let repo = QualityRepository::load_from_directory(&quality_dir)?;
+    let risks = repo.get_risks();
+    
+    if risks.is_empty() {
+        println!("{}", "No risks found".yellow());
+        return Ok(());
+    }
+    
+    println!("{}", "Risks".bold().blue());
+    
+    let mut table = Table::new();
+    table.set_header(vec!["ID", "Name", "Category", "Probability", "Impact", "Risk Score"]);
+    
+    for risk in risks {
+        let category = match &risk.category {
+            RiskCategory::Technical => "Technical",
+            RiskCategory::Schedule => "Schedule",
+            RiskCategory::Cost => "Cost",
+            RiskCategory::Quality => "Quality",
+            RiskCategory::Safety => "Safety",
+            RiskCategory::Regulatory => "Regulatory",
+            RiskCategory::Market => "Market",
+            RiskCategory::Resource => "Resource",
+            RiskCategory::Other(name) => name,
+        };
+        
+        let risk_score_color = if risk.risk_score >= 0.7 {
+            format!("{:.2}", risk.risk_score).red()
+        } else if risk.risk_score >= 0.3 {
+            format!("{:.2}", risk.risk_score).yellow()
+        } else {
+            format!("{:.2}", risk.risk_score).green()
+        };
+        
+        table.add_row(vec![
+            risk.id.to_string(),
+            truncate_string(&risk.name, 25),
+            category.to_string(),
+            format!("{:.2}", risk.probability),
+            format!("{:.2}", risk.impact),
+            risk_score_color.to_string(),
+        ]);
+    }
+    
+    println!("{}", table);
+    Ok(())
+}
+
+async fn link_output_to_requirement_interactive(project_ctx: ProjectContext) -> Result<()> {
+    println!("{}", "Linking output to requirement".bold().blue());
+    
+    let quality_dir = project_ctx.module_path("quality");
+    let mut repo = QualityRepository::load_from_directory(&quality_dir)?;
+    
+    let outputs = repo.get_outputs();
+    if outputs.is_empty() {
+        println!("{}", "No outputs found. Add outputs first.".yellow());
+        return Ok(());
+    }
+    
+    let requirements = repo.get_requirements();
+    if requirements.is_empty() {
+        println!("{}", "No requirements found. Add requirements first.".yellow());
+        return Ok(());
+    }
+    
+    let output_options: Vec<String> = outputs.iter()
+        .map(|o| format!("{} - {}", o.name, truncate_string(&o.description, 50)))
+        .collect();
+    
+    let output_selection = Select::new("Select output:", output_options.clone()).prompt()?;
+    let output_index = output_options.iter().position(|x| x == &output_selection).unwrap();
+    let selected_output = &outputs[output_index];
+    let output_id = selected_output.id;
+    let output_name = selected_output.name.clone();
+    
+    let req_options: Vec<String> = requirements.iter()
+        .map(|r| format!("{} - {}", r.name, truncate_string(&r.description, 50)))
+        .collect();
+    
+    let req_selection = Select::new("Select requirement:", req_options.clone()).prompt()?;
+    let req_index = req_options.iter().position(|x| x == &req_selection).unwrap();
+    let selected_requirement = &requirements[req_index];
+    let req_id = selected_requirement.id;
+    let req_name = selected_requirement.name.clone();
+    
+    repo.link_output_to_requirement(output_id, req_id)?;
+    repo.save_to_directory(&quality_dir)?;
+    
+    println!("{} Linked output '{}' to requirement '{}'", 
+             "✓".green(), output_name, req_name);
+    
+    Ok(())
+}
+
+async fn link_output_to_input_interactive(project_ctx: ProjectContext) -> Result<()> {
+    println!("{}", "Linking output to input".bold().blue());
+    
+    let quality_dir = project_ctx.module_path("quality");
+    let mut repo = QualityRepository::load_from_directory(&quality_dir)?;
+    
+    let outputs = repo.get_outputs();
+    if outputs.is_empty() {
+        println!("{}", "No outputs found. Add outputs first.".yellow());
+        return Ok(());
+    }
+    
+    let inputs = repo.get_inputs();
+    if inputs.is_empty() {
+        println!("{}", "No inputs found. Add inputs first.".yellow());
+        return Ok(());
+    }
+    
+    let output_options: Vec<String> = outputs.iter()
+        .map(|o| format!("{} - {}", o.name, truncate_string(&o.description, 50)))
+        .collect();
+    
+    let output_selection = Select::new("Select output:", output_options.clone()).prompt()?;
+    let output_index = output_options.iter().position(|x| x == &output_selection).unwrap();
+    let selected_output = &outputs[output_index];
+    let output_id = selected_output.id;
+    let output_name = selected_output.name.clone();
+    
+    let input_options: Vec<String> = inputs.iter()
+        .map(|i| format!("{} - {}", i.name, truncate_string(&i.description, 50)))
+        .collect();
+    
+    let input_selection = Select::new("Select input:", input_options.clone()).prompt()?;
+    let input_index = input_options.iter().position(|x| x == &input_selection).unwrap();
+    let selected_input = &inputs[input_index];
+    let input_id = selected_input.id;
+    let input_name = selected_input.name.clone();
+    
+    repo.link_output_to_input(output_id, input_id)?;
+    repo.save_to_directory(&quality_dir)?;
+    
+    println!("{} Linked output '{}' to input '{}'", 
+             "✓".green(), output_name, input_name);
+    
+    Ok(())
+}
+
+async fn link_control_to_output_interactive(project_ctx: ProjectContext) -> Result<()> {
+    println!("{}", "Linking control to output".bold().blue());
+    
+    let quality_dir = project_ctx.module_path("quality");
+    let mut repo = QualityRepository::load_from_directory(&quality_dir)?;
+    
+    let controls = repo.get_controls();
+    if controls.is_empty() {
+        println!("{}", "No controls found. Add controls first.".yellow());
+        return Ok(());
+    }
+    
+    let outputs = repo.get_outputs();
+    if outputs.is_empty() {
+        println!("{}", "No outputs found. Add outputs first.".yellow());
+        return Ok(());
+    }
+    
+    let control_options: Vec<String> = controls.iter()
+        .map(|c| format!("{} - {}", c.name, truncate_string(&c.description, 50)))
+        .collect();
+    
+    let control_selection = Select::new("Select control:", control_options.clone()).prompt()?;
+    let control_index = control_options.iter().position(|x| x == &control_selection).unwrap();
+    let selected_control = &controls[control_index];
+    let control_id = selected_control.id;
+    let control_name = selected_control.name.clone();
+    
+    let output_options: Vec<String> = outputs.iter()
+        .map(|o| format!("{} - {}", o.name, truncate_string(&o.description, 50)))
+        .collect();
+    
+    let output_selection = Select::new("Select output:", output_options.clone()).prompt()?;
+    let output_index = output_options.iter().position(|x| x == &output_selection).unwrap();
+    let selected_output = &outputs[output_index];
+    let output_id = selected_output.id;
+    let output_name = selected_output.name.clone();
+    
+    repo.link_control_to_output(control_id, output_id)?;
+    repo.save_to_directory(&quality_dir)?;
+    
+    println!("{} Linked control '{}' to output '{}'", 
+             "✓".green(), control_name, output_name);
+    
+    Ok(())
+}
+
+async fn run_traceability_matrix(project_ctx: ProjectContext) -> Result<()> {
+    let quality_dir = project_ctx.module_path("quality");
+    let mut repo = QualityRepository::load_from_directory(&quality_dir)?;
+    
+    let mut menu = TraceabilityMenuInterface::new();
+    menu.show_traceability_menu(&mut repo)
+}
+
+async fn run_risk_scoring(project_ctx: ProjectContext) -> Result<()> {
+    let quality_dir = project_ctx.module_path("quality");
+    let mut repo = QualityRepository::load_from_directory(&quality_dir)?;
+    
+    let mut menu = ScoringMenuInterface::new();
+    menu.show_scoring_menu(&mut repo)
 }

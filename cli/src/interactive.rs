@@ -80,11 +80,20 @@ async fn run_quality_interactive(project_ctx: ProjectContext) -> Result<()> {
             "Add Requirement",
             "List Requirements",
             "Add Design Input",
+            "List Design Inputs",
             "Add Design Output",
+            "List Design Outputs",
             "Add Design Control",
+            "List Design Controls",
             "Add Risk",
+            "List Risks",
             "Link Input to Requirement",
+            "Link Output to Requirement",
+            "Link Output to Input",
+            "Link Control to Output",
             "Assess Risks",
+            "Risk Scoring Tools",
+            "Traceability Matrix",
             "Quality Dashboard",
             "Back to Main Menu",
         ];
@@ -103,20 +112,47 @@ async fn run_quality_interactive(project_ctx: ProjectContext) -> Result<()> {
             "Add Design Input" => {
                 execute_quality_command(QualityCommands::AddInput, project_ctx.clone()).await
             },
+            "List Design Inputs" => {
+                execute_quality_command(QualityCommands::ListInputs, project_ctx.clone()).await
+            },
             "Add Design Output" => {
                 execute_quality_command(QualityCommands::AddOutput, project_ctx.clone()).await
+            },
+            "List Design Outputs" => {
+                execute_quality_command(QualityCommands::ListOutputs, project_ctx.clone()).await
             },
             "Add Design Control" => {
                 execute_quality_command(QualityCommands::AddControl, project_ctx.clone()).await
             },
+            "List Design Controls" => {
+                execute_quality_command(QualityCommands::ListControls, project_ctx.clone()).await
+            },
             "Add Risk" => {
                 execute_quality_command(QualityCommands::AddRisk, project_ctx.clone()).await
+            },
+            "List Risks" => {
+                execute_quality_command(QualityCommands::ListRisks, project_ctx.clone()).await
             },
             "Link Input to Requirement" => {
                 execute_quality_command(QualityCommands::LinkInputToRequirement, project_ctx.clone()).await
             },
+            "Link Output to Requirement" => {
+                execute_quality_command(QualityCommands::LinkOutputToRequirement, project_ctx.clone()).await
+            },
+            "Link Output to Input" => {
+                execute_quality_command(QualityCommands::LinkOutputToInput, project_ctx.clone()).await
+            },
+            "Link Control to Output" => {
+                execute_quality_command(QualityCommands::LinkControlToOutput, project_ctx.clone()).await
+            },
             "Assess Risks" => {
                 execute_quality_command(QualityCommands::AssessRisks, project_ctx.clone()).await
+            },
+            "Risk Scoring Tools" => {
+                execute_quality_command(QualityCommands::RiskScoring, project_ctx.clone()).await
+            },
+            "Traceability Matrix" => {
+                execute_quality_command(QualityCommands::TraceabilityMatrix, project_ctx.clone()).await
             },
             "Quality Dashboard" => {
                 execute_quality_command(QualityCommands::Dashboard, project_ctx.clone()).await

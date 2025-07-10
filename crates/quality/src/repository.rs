@@ -179,6 +179,34 @@ impl QualityRepository {
             ))
         }
     }
+    
+    pub fn link_output_to_input(&mut self, output_id: Id, input_id: Id) -> Result<()> {
+        if let Some(output) = self.outputs.iter_mut().find(|o| o.id == output_id) {
+            if !output.inputs.contains(&input_id) {
+                output.inputs.push(input_id);
+                output.updated = chrono::Utc::now();
+            }
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Output with id {} not found", output_id)
+            ))
+        }
+    }
+    
+    pub fn link_control_to_output(&mut self, control_id: Id, output_id: Id) -> Result<()> {
+        if let Some(control) = self.controls.iter_mut().find(|c| c.id == control_id) {
+            if !control.outputs.contains(&output_id) {
+                control.outputs.push(output_id);
+                control.updated = chrono::Utc::now();
+            }
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Control with id {} not found", control_id)
+            ))
+        }
+    }
 }
 
 // Helper functions for loading/saving RON files
