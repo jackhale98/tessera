@@ -136,6 +136,10 @@ impl QualityRepository {
         self.risks.iter().find(|r| r.id == id)
     }
     
+    pub fn get_all_requirements(&self) -> &[Requirement] {
+        &self.requirements
+    }
+    
     pub fn update_requirement(&mut self, updated: Requirement) -> Result<()> {
         updated.validate()?;
         if let Some(pos) = self.requirements.iter().position(|r| r.id == updated.id) {

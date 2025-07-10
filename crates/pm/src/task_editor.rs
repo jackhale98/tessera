@@ -158,8 +158,9 @@ impl TaskEditor {
 
     /// Edit task description
     fn edit_task_description(repository: &mut ProjectRepository, task_id: Id) -> Result<()> {
-        let mut task = repository.find_task_by_id(task_id)?
+        let task = repository.find_task_by_id(task_id)
             .ok_or_else(|| DesignTrackError::NotFound(format!("Task {}", task_id)))?;
+        let mut task = task.clone();
 
         let new_description = Text::new("Task description:")
             .with_default(&task.description)
@@ -174,8 +175,9 @@ impl TaskEditor {
 
     /// Edit task priority
     fn edit_task_priority(repository: &mut ProjectRepository, task_id: Id) -> Result<()> {
-        let mut task = repository.find_task_by_id(task_id)?
+        let task = repository.find_task_by_id(task_id)
             .ok_or_else(|| DesignTrackError::NotFound(format!("Task {}", task_id)))?;
+        let mut task = task.clone();
 
         let priorities = vec![
             TaskPriority::Critical,
@@ -201,8 +203,9 @@ impl TaskEditor {
 
     /// Edit task status with validation
     fn edit_task_status(repository: &mut ProjectRepository, task_id: Id) -> Result<()> {
-        let mut task = repository.find_task_by_id(task_id)?
+        let task = repository.find_task_by_id(task_id)
             .ok_or_else(|| DesignTrackError::NotFound(format!("Task {}", task_id)))?;
+        let mut task = task.clone();
 
         let statuses = vec![
             TaskStatus::NotStarted,
@@ -255,12 +258,13 @@ impl TaskEditor {
 
     /// Edit task progress with validation
     fn edit_task_progress(repository: &mut ProjectRepository, task_id: Id) -> Result<()> {
-        let mut task = repository.find_task_by_id(task_id)?
+        let task = repository.find_task_by_id(task_id)
             .ok_or_else(|| DesignTrackError::NotFound(format!("Task {}", task_id)))?;
+        let mut task = task.clone();
 
-        let new_progress = CustomType::<f32>::new("Progress percentage (0-100):")
+        let new_progress = CustomType::<f64>::new("Progress percentage (0-100):")
             .with_default(task.progress_percentage)
-            .with_validator(|input: &f32| {
+            .with_validator(|input: &f64| {
                 if *input >= 0.0 && *input <= 100.0 {
                     Ok(Validation::Valid)
                 } else {
@@ -295,8 +299,9 @@ impl TaskEditor {
 
     /// Edit task effort estimates with duration recalculation
     fn edit_task_effort(repository: &mut ProjectRepository, task_id: Id) -> Result<()> {
-        let mut task = repository.find_task_by_id(task_id)?
+        let task = repository.find_task_by_id(task_id)
             .ok_or_else(|| DesignTrackError::NotFound(format!("Task {}", task_id)))?;
+        let mut task = task.clone();
 
         println!("Current estimates - Estimated: {:.1}h, Actual: {:.1}h", 
             task.estimated_hours, task.actual_hours);
@@ -311,9 +316,9 @@ impl TaskEditor {
 
         match edit_choice {
             "Estimated hours" => {
-                let new_estimated = CustomType::<f32>::new("Estimated hours:")
+                let new_estimated = CustomType::<f64>::new("Estimated hours:")
                     .with_default(task.estimated_hours)
-                    .with_validator(|input: &f32| {
+                    .with_validator(|input: &f64| {
                         if *input >= 0.0 {
                             Ok(Validation::Valid)
                         } else {
@@ -326,9 +331,9 @@ impl TaskEditor {
                 task.estimated_hours = new_estimated;
             }
             "Actual hours" => {
-                let new_actual = CustomType::<f32>::new("Actual hours:")
+                let new_actual = CustomType::<f64>::new("Actual hours:")
                     .with_default(task.actual_hours)
-                    .with_validator(|input: &f32| {
+                    .with_validator(|input: &f64| {
                         if *input >= 0.0 {
                             Ok(Validation::Valid)
                         } else {
@@ -341,18 +346,18 @@ impl TaskEditor {
                 task.actual_hours = new_actual;
             }
             "Both estimates" => {
-                let new_estimated = CustomType::<f32>::new("Estimated hours:")
+                let new_estimated = CustomType::<f64>::new("Estimated hours:")
                     .with_default(task.estimated_hours)
-                    .with_validator(|input: &f32| {
+                    .with_validator(|input: &f64| {
                         if *input >= 0.0 { Ok(Validation::Valid) } 
                         else { Ok(Validation::Invalid("Hours must be non-negative".into())) }
                     })
                     .prompt()
                     .map_err(|e| DesignTrackError::Ui(e.to_string()))?;
 
-                let new_actual = CustomType::<f32>::new("Actual hours:")
+                let new_actual = CustomType::<f64>::new("Actual hours:")
                     .with_default(task.actual_hours)
-                    .with_validator(|input: &f32| {
+                    .with_validator(|input: &f64| {
                         if *input >= 0.0 { Ok(Validation::Valid) } 
                         else { Ok(Validation::Invalid("Hours must be non-negative".into())) }
                     })
@@ -372,8 +377,9 @@ impl TaskEditor {
 
     /// Edit task dates with validation
     fn edit_task_dates(repository: &mut ProjectRepository, task_id: Id) -> Result<()> {
-        let mut task = repository.find_task_by_id(task_id)?
+        let task = repository.find_task_by_id(task_id)
             .ok_or_else(|| DesignTrackError::NotFound(format!("Task {}", task_id)))?;
+        let mut task = task.clone();
 
         let date_choices = vec![
             "Set start date",
@@ -464,8 +470,9 @@ impl TaskEditor {
         repository: &mut ProjectRepository,
         task_id: Id,
     ) -> Result<()> {
-        let mut task = repository.find_task_by_id(task_id)?
+        let task = repository.find_task_by_id(task_id)
             .ok_or_else(|| DesignTrackError::NotFound(format!("Task {}", task_id)))?;
+        let mut task = task.clone();
 
         if project.resources.is_empty() {
             println!("ℹ No resources available to assign");
@@ -510,8 +517,10 @@ impl TaskEditor {
                         .prompt()
                         .map_err(|e| DesignTrackError::Ui(e.to_string()))?;
 
-                    let resource_id = selected.split(" - ").next().unwrap().parse::<Id>()
+                    let uuid_str = selected.split(" - ").next().unwrap();
+                    let uuid = uuid_str.parse::<uuid::Uuid>()
                         .map_err(|e| DesignTrackError::Validation(format!("Invalid resource ID: {}", e)))?;
+                    let resource_id = Id::from(uuid);
 
                     task.assigned_resources.push(resource_id);
                     println!("✓ Resource assigned");
@@ -533,8 +542,10 @@ impl TaskEditor {
                         .prompt()
                         .map_err(|e| DesignTrackError::Ui(e.to_string()))?;
 
-                    let resource_id = selected.split(" - ").next().unwrap().parse::<Id>()
+                    let uuid_str = selected.split(" - ").next().unwrap();
+                    let uuid = uuid_str.parse::<uuid::Uuid>()
                         .map_err(|e| DesignTrackError::Validation(format!("Invalid resource ID: {}", e)))?;
+                    let resource_id = Id::from(uuid);
 
                     task.assigned_resources.retain(|&id| id != resource_id);
                     println!("✓ Resource removed");
@@ -564,8 +575,9 @@ impl TaskEditor {
         repository: &mut ProjectRepository,
         task_id: Id,
     ) -> Result<()> {
-        let mut task = repository.find_task_by_id(task_id)?
+        let task = repository.find_task_by_id(task_id)
             .ok_or_else(|| DesignTrackError::NotFound(format!("Task {}", task_id)))?;
+        let mut task = task.clone();
 
         // Display current dependencies
         if !task.dependencies.is_empty() {
@@ -605,8 +617,10 @@ impl TaskEditor {
                         .prompt()
                         .map_err(|e| DesignTrackError::Ui(e.to_string()))?;
 
-                    let dep_id = selected.split(" - ").next().unwrap().parse::<Id>()
+                    let uuid_str = selected.split(" - ").next().unwrap();
+                    let uuid = uuid_str.parse::<uuid::Uuid>()
                         .map_err(|e| DesignTrackError::Validation(format!("Invalid task ID: {}", e)))?;
+                    let dep_id = Id::from(uuid);
 
                     // Check for circular dependency
                     if Self::would_create_circular_dependency(project, dep_id, task_id) {
@@ -634,8 +648,10 @@ impl TaskEditor {
                         .prompt()
                         .map_err(|e| DesignTrackError::Ui(e.to_string()))?;
 
-                    let dep_id = selected.split(" - ").next().unwrap().parse::<Id>()
+                    let uuid_str = selected.split(" - ").next().unwrap();
+                    let uuid = uuid_str.parse::<uuid::Uuid>()
                         .map_err(|e| DesignTrackError::Validation(format!("Invalid task ID: {}", e)))?;
+                    let dep_id = Id::from(uuid);
 
                     task.dependencies.retain(|&id| id != dep_id);
                     println!("✓ Dependency removed");
@@ -665,8 +681,9 @@ impl TaskEditor {
         repository: &mut ProjectRepository,
         task_id: Id,
     ) -> Result<()> {
-        let mut task = repository.find_task_by_id(task_id)?
+        let task = repository.find_task_by_id(task_id)
             .ok_or_else(|| DesignTrackError::NotFound(format!("Task {}", task_id)))?;
+        let mut task = task.clone();
 
         if task.assigned_resources.is_empty() {
             println!("ℹ No resources assigned - cannot calculate duration");
@@ -679,7 +696,7 @@ impl TaskEditor {
         }
 
         // Calculate total daily capacity from assigned resources
-        let total_daily_hours: f32 = task.assigned_resources.iter()
+        let total_daily_hours: f64 = task.assigned_resources.iter()
             .filter_map(|resource_id| project.resources.get(resource_id))
             .map(|resource| resource.daily_hours)
             .sum();
@@ -718,11 +735,11 @@ impl TaskEditor {
 
     /// Validate task for consistency and completeness
     fn validate_task(repository: &ProjectRepository, task_id: Id) -> Result<()> {
-        let task = repository.find_task_by_id(task_id)?
+        let task = repository.find_task_by_id(task_id)
             .ok_or_else(|| DesignTrackError::NotFound(format!("Task {}", task_id)))?;
 
         let mut issues = Vec::new();
-        let mut warnings = Vec::new();
+        let mut warnings: Vec<String> = Vec::new();
 
         // Required field validation
         if task.name.trim().is_empty() {
@@ -753,26 +770,26 @@ impl TaskEditor {
         match task.status {
             TaskStatus::NotStarted => {
                 if task.progress_percentage > 0.0 {
-                    warnings.push("Task marked as Not Started but has progress");
+                    warnings.push("Task marked as Not Started but has progress".to_string());
                 }
                 if task.start_date.is_some() {
-                    warnings.push("Task marked as Not Started but has start date");
+                    warnings.push("Task marked as Not Started but has start date".to_string());
                 }
             }
             TaskStatus::InProgress => {
                 if task.progress_percentage == 0.0 {
-                    warnings.push("Task in progress but no progress recorded");
+                    warnings.push("Task in progress but no progress recorded".to_string());
                 }
                 if task.progress_percentage == 100.0 {
-                    warnings.push("Task in progress but shows 100% complete");
+                    warnings.push("Task in progress but shows 100% complete".to_string());
                 }
             }
             TaskStatus::Completed => {
                 if task.progress_percentage < 100.0 {
-                    warnings.push("Task marked completed but progress < 100%");
+                    warnings.push("Task marked completed but progress < 100%".to_string());
                 }
                 if task.completion_date.is_none() {
-                    warnings.push("Task marked completed but no completion date");
+                    warnings.push("Task marked completed but no completion date".to_string());
                 }
             }
             _ => {}
@@ -780,14 +797,14 @@ impl TaskEditor {
 
         // Resource assignment warnings
         if task.assigned_resources.is_empty() {
-            warnings.push("No resources assigned to task");
+            warnings.push("No resources assigned to task".to_string());
         }
 
         // Effort vs actual warnings
         if task.actual_hours > 0.0 && task.estimated_hours > 0.0 {
             let variance = (task.actual_hours - task.estimated_hours) / task.estimated_hours * 100.0;
             if variance > 20.0 {
-                warnings.push(&format!("Actual effort exceeds estimate by {:.1}%", variance));
+                warnings.push(format!("Actual effort exceeds estimate by {:.1}%", variance));
             }
         }
 
@@ -889,8 +906,9 @@ impl TaskEditor {
                 .prompt()
                 .map_err(|e| DesignTrackError::Ui(e.to_string()))?;
 
-                for task_id in task_ids {
-                    if let Ok(Some(mut task)) = repository.find_task_by_id(task_id) {
+                for task_id in &task_ids {
+                    if let Some(task) = repository.find_task_by_id(*task_id) {
+                        let mut task = task.clone();
                         task.priority = priority;
                         let _ = repository.update_task(task);
                     }
@@ -908,8 +926,9 @@ impl TaskEditor {
                 .prompt()
                 .map_err(|e| DesignTrackError::Ui(e.to_string()))?;
 
-                for task_id in task_ids {
-                    if let Ok(Some(mut task)) = repository.find_task_by_id(task_id) {
+                for task_id in &task_ids {
+                    if let Some(task) = repository.find_task_by_id(*task_id) {
+                        let mut task = task.clone();
                         task.status = status;
                         let _ = repository.update_task(task);
                     }

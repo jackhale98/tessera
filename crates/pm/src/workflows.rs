@@ -265,10 +265,10 @@ impl WorkflowManager {
             let base_naive = base_date.date_naive();
             let result_naive = if lag_days > 0.0 {
                 // Positive lag - add working days
-                calendar.add_working_days(base_naive, lag_days)
+                calendar.add_working_days(base_naive, lag_days as f64)
             } else {
                 // Negative lag (lead) - subtract working days
-                calendar.subtract_working_days(base_naive, -lag_days)
+                calendar.subtract_working_days(base_naive, (-lag_days) as f64)
             };
             result_naive.and_hms_opt(9, 0, 0).unwrap().and_utc()
         } else {
@@ -496,10 +496,15 @@ impl WorkflowManager {
                         }
                     }
                     WorkflowAction::UpdateDependentTasks => {
-                        let dependent_tasks = self.get_dependent_tasks(task_id);
-                        for dep in dependent_tasks {
+                        // Get dependent task IDs from the manager's dependencies
+                        let dependent_task_ids: Vec<Id> = self.dependencies.iter()
+                            .filter(|dep| dep.predecessor_id == task_id)
+                            .map(|dep| dep.successor_id)
+                            .collect();
+                        
+                        for dep_id in dependent_task_ids {
                             // Trigger recalculation of dependent task schedules
-                            action_results.push(format!("Updated dependent task {}", dep.successor_id));
+                            action_results.push(format!("Updated dependent task {}", dep_id));
                         }
                     }
                     _ => {

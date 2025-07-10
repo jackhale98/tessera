@@ -1,0 +1,25 @@
+[
+    (
+        id: ("54511071-8d45-4996-8d10-ec251391190e"),
+        name: "test req",
+        description: "this is a test requirement",
+        category: Reliability,
+        priority: High,
+        status: Draft,
+        due_date: None,
+        acceptance_criteria: [
+            "Hopefully this saves",
+            "p/f",
+            "p/f",
+            "p",
+            "n",
+        ],
+        risk_score: None,
+        created: "2025-07-10T19:46:21.812880878Z",
+        updated: "2025-07-10T19:46:21.812880878Z",
+        links: [],
+        traced_to: [],
+        traced_from: [],
+        metadata: {},
+    ),
+]

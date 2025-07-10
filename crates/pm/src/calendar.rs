@@ -230,7 +230,7 @@ impl Calendar {
         self.working_hours.daily_hours
     }
 
-    pub fn add_working_days(&self, start_date: NaiveDate, working_days: f32) -> NaiveDate {
+    pub fn add_working_days(&self, start_date: NaiveDate, working_days: f64) -> NaiveDate {
         if working_days <= 0.0 {
             return start_date;
         }
@@ -255,7 +255,7 @@ impl Calendar {
             if self.is_working_day(current) {
                 let daily_hours = self.get_working_hours(current);
                 if daily_hours > 0.0 {
-                    let working_day_fraction = daily_hours / self.working_hours.daily_hours;
+                    let working_day_fraction = daily_hours as f64 / self.working_hours.daily_hours as f64;
                     remaining_days -= working_day_fraction;
                     
                     // If we've completed the required working days, we're done
@@ -271,7 +271,7 @@ impl Calendar {
         current
     }
 
-    pub fn subtract_working_days(&self, start_date: NaiveDate, working_days: f32) -> NaiveDate {
+    pub fn subtract_working_days(&self, start_date: NaiveDate, working_days: f64) -> NaiveDate {
         if working_days <= 0.0 {
             return start_date;
         }
@@ -296,7 +296,7 @@ impl Calendar {
             if self.is_working_day(current) {
                 let daily_hours = self.get_working_hours(current);
                 if daily_hours > 0.0 {
-                    let working_day_fraction = daily_hours / self.working_hours.daily_hours;
+                    let working_day_fraction = daily_hours as f64 / self.working_hours.daily_hours as f64;
                     remaining_days -= working_day_fraction;
                     
                     // If we've completed the required working days, we're done

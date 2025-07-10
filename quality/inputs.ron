@@ -1,0 +1,13 @@
+[
+    (
+        id: ("45d582df-731c-4c13-8be4-39f8cd73bb56"),
+        name: "New input",
+        description: "this is a test input",
+        input_type: Specification,
+        source: "test req",
+        requirements: [],
+        created: "2025-07-10T19:47:06.845245635Z",
+        updated: "2025-07-10T19:47:06.845245635Z",
+        metadata: {},
+    ),
+]

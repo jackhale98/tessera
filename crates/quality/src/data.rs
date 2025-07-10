@@ -11,10 +11,14 @@ pub struct Requirement {
     pub category: RequirementCategory,
     pub priority: Priority,
     pub status: RequirementStatus,
+    pub due_date: Option<DateTime<Utc>>,
     pub acceptance_criteria: Vec<String>,
+    pub risk_score: Option<f64>,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
     pub links: Vec<Link>,
+    pub traced_to: Vec<Id>,
+    pub traced_from: Vec<Id>,
     pub metadata: IndexMap<String, String>,
 }
 
@@ -39,12 +43,13 @@ pub enum Priority {
     Low,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum RequirementStatus {
     Draft,
     Approved,
     Implemented,
     Verified,
+    Failed,
     Deprecated,
 }
 
@@ -105,10 +110,14 @@ impl Requirement {
             category,
             priority: Priority::Medium,
             status: RequirementStatus::Draft,
+            due_date: None,
             acceptance_criteria: Vec::new(),
+            risk_score: None,
             created: now,
             updated: now,
             links: Vec::new(),
+            traced_to: Vec::new(),
+            traced_from: Vec::new(),
             metadata: IndexMap::new(),
         }
     }

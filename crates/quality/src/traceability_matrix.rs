@@ -3,19 +3,20 @@ use tessera_core::{Id, Result, DesignTrackError};
 use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use colored::Colorize;
+use std::fmt;
 
 /// Traceability matrix for quality management
 pub struct TraceabilityMatrix {
-    requirements: Vec<Id>,
-    inputs: Vec<Id>,
-    outputs: Vec<Id>,
-    controls: Vec<Id>,
-    risks: Vec<Id>,
-    links: HashMap<(Id, Id), TraceabilityLink>,
+    pub requirements: Vec<Id>,
+    pub inputs: Vec<Id>,
+    pub outputs: Vec<Id>,
+    pub controls: Vec<Id>,
+    pub risks: Vec<Id>,
+    pub links: HashMap<(Id, Id), TraceabilityLink>,
 }
 
 /// Relationship types in the traceability matrix
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum TraceabilityRelation {
     Implements,    // Input/Output implements Requirement
     Controls,      // Control validates Output/Input  
@@ -24,6 +25,20 @@ pub enum TraceabilityRelation {
     Verifies,      // Output verifies Input
     Satisfies,     // Output satisfies Requirement
     Traces,        // General traceability link
+}
+
+impl fmt::Display for TraceabilityRelation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TraceabilityRelation::Implements => write!(f, "Implements"),
+            TraceabilityRelation::Controls => write!(f, "Controls"),
+            TraceabilityRelation::Mitigates => write!(f, "Mitigates"),
+            TraceabilityRelation::References => write!(f, "References"),
+            TraceabilityRelation::Verifies => write!(f, "Verifies"),
+            TraceabilityRelation::Satisfies => write!(f, "Satisfies"),
+            TraceabilityRelation::Traces => write!(f, "Traces"),
+        }
+    }
 }
 
 /// Link in the traceability matrix
@@ -109,7 +124,7 @@ impl TraceabilityMatrix {
                     target_id: link.target_id,
                     relation: TraceabilityRelation::References,
                     confidence: 0.8,
-                    notes: link.relation_type.clone(),
+                    notes: link.relation_type.clone().unwrap_or_default(),
                 });
             }
         }
@@ -407,7 +422,7 @@ impl TraceabilityMatrix {
     }
 
     /// Get entity information for display
-    fn get_entity_info(&self, entity_id: Id, repository: &QualityRepository) -> (String, String) {
+    pub fn get_entity_info(&self, entity_id: Id, repository: &QualityRepository) -> (String, String) {
         // Check requirements
         if let Some(req) = repository.get_requirements().iter().find(|r| r.id == entity_id) {
             return (req.name.clone(), "Requirement".to_string());
@@ -484,8 +499,10 @@ pub struct SuggestedLink {
 
 /// Simple text similarity calculation
 fn calculate_text_similarity(text1: &str, text2: &str) -> f32 {
-    let words1: HashSet<&str> = text1.to_lowercase().split_whitespace().collect();
-    let words2: HashSet<&str> = text2.to_lowercase().split_whitespace().collect();
+    let text1_lower = text1.to_lowercase();
+    let text2_lower = text2.to_lowercase();
+    let words1: HashSet<&str> = text1_lower.split_whitespace().collect();
+    let words2: HashSet<&str> = text2_lower.split_whitespace().collect();
 
     let intersection = words1.intersection(&words2).count();
     let union = words1.union(&words2).count();

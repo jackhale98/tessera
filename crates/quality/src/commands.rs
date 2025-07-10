@@ -209,6 +209,7 @@ impl QualityCommands {
                     RequirementStatus::Approved => "Approved",
                     RequirementStatus::Implemented => "Implemented",
                     RequirementStatus::Verified => "Verified",
+                    RequirementStatus::Failed => "Failed",
                     RequirementStatus::Deprecated => "Deprecated",
                 };
                 *status_counts.entry(status).or_insert(0) += 1;

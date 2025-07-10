@@ -36,6 +36,7 @@ pub struct Link {
     pub id: Id,
     pub target_id: Id,
     pub link_type: String,
+    pub relation_type: Option<String>,
     pub description: Option<String>,
 }
 
@@ -45,6 +46,7 @@ impl Link {
             id: Id::new(),
             target_id,
             link_type,
+            relation_type: None,
             description: None,
         }
     }

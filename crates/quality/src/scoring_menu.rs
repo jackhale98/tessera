@@ -96,7 +96,7 @@ impl ScoringMenuInterface {
 
         // Select requirement
         let req_choices: Vec<String> = requirements.iter()
-            .map(|req| format!("{} - {}", req.id, req.title))
+            .map(|req| format!("{} - {}", req.id, req.name))
             .collect();
 
         let selected = match self.prompt_select("Select requirement:", req_choices)? {
@@ -116,7 +116,7 @@ impl ScoringMenuInterface {
         let score = self.scorer.calculate_requirement_risk_score(requirement, repository)?;
         
         // Display results
-        self.display_single_risk_result(&requirement.title, &score);
+        self.display_single_risk_result(&requirement.name, &score);
 
         Ok(())
     }

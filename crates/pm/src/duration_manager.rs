@@ -8,11 +8,11 @@ pub struct DurationManager;
 
 #[derive(Debug, Clone)]
 pub struct DurationCalculation {
-    pub estimated_duration_days: f32,
-    pub estimated_duration_hours: f32,
-    pub working_days: f32,
+    pub estimated_duration_days: f64,
+    pub estimated_duration_hours: f64,
+    pub working_days: f64,
     pub calendar_days: i64,
-    pub resource_utilization: f32,
+    pub resource_utilization: f64,
     pub critical_path_impact: bool,
     pub calculation_method: DurationMethod,
 }
@@ -28,8 +28,8 @@ pub enum DurationMethod {
 #[derive(Debug, Clone)]
 pub struct ResourceAllocation {
     pub resource_id: Id,
-    pub allocation_percentage: f32,
-    pub daily_hours: f32,
+    pub allocation_percentage: f64,
+    pub daily_hours: f64,
     pub available_from: Option<DateTime<Utc>>,
     pub available_until: Option<DateTime<Utc>>,
 }
@@ -82,7 +82,7 @@ impl DurationManager {
         }
 
         // Calculate total daily capacity
-        let total_daily_hours: f32 = assigned_resources.iter()
+        let total_daily_hours: f64 = assigned_resources.iter()
             .map(|r| r.daily_hours)
             .sum();
 
@@ -93,7 +93,7 @@ impl DurationManager {
         };
 
         let utilization = if assigned_resources.len() > 0 {
-            total_daily_hours / (assigned_resources.len() as f32 * 8.0) * 100.0
+            total_daily_hours / (assigned_resources.len() as f64 * 8.0) * 100.0
         } else {
             0.0
         };
@@ -112,7 +112,7 @@ impl DurationManager {
     /// Calculate duration for fixed duration tasks
     pub fn calculate_fixed_duration(
         task: &Task,
-        fixed_duration_days: f32,
+        fixed_duration_days: f64,
         resources: &[Resource],
         calendar: &Calendar,
     ) -> Result<DurationCalculation> {
@@ -120,14 +120,14 @@ impl DurationManager {
             .filter(|r| task.assigned_resources.contains(&r.id))
             .collect();
 
-        let total_daily_hours: f32 = assigned_resources.iter()
+        let total_daily_hours: f64 = assigned_resources.iter()
             .map(|r| r.daily_hours)
             .sum();
 
         let required_effort = total_daily_hours * fixed_duration_days;
         
         let utilization = if !assigned_resources.is_empty() {
-            total_daily_hours / (assigned_resources.len() as f32 * 8.0) * 100.0
+            total_daily_hours / (assigned_resources.len() as f64 * 8.0) * 100.0
         } else {
             0.0
         };
@@ -145,7 +145,7 @@ impl DurationManager {
 
     /// Calculate duration for fixed work tasks
     pub fn calculate_fixed_work_duration(
-        fixed_work_hours: f32,
+        fixed_work_hours: f64,
         resource_allocations: &[ResourceAllocation],
         calendar: &Calendar,
     ) -> Result<DurationCalculation> {
@@ -163,7 +163,7 @@ impl DurationManager {
         }
 
         // Calculate effective daily capacity based on allocations
-        let effective_daily_hours: f32 = resource_allocations.iter()
+        let effective_daily_hours: f64 = resource_allocations.iter()
             .map(|alloc| alloc.daily_hours * (alloc.allocation_percentage / 100.0))
             .sum();
 
@@ -175,7 +175,7 @@ impl DurationManager {
 
         let avg_utilization = resource_allocations.iter()
             .map(|alloc| alloc.allocation_percentage)
-            .sum::<f32>() / resource_allocations.len() as f32;
+            .sum::<f64>() / resource_allocations.len() as f64;
 
         Ok(DurationCalculation {
             estimated_duration_days: duration_days,
@@ -208,7 +208,7 @@ impl DurationManager {
             let current_naive_date = current_date.date_naive();
             
             if calendar.is_working_day(current_naive_date) {
-                let daily_capacity: f32 = resource_allocations.iter()
+                let daily_capacity: f64 = resource_allocations.iter()
                     .filter(|alloc| {
                         // Check if resource is available on this date
                         let available = alloc.available_from
@@ -218,7 +218,7 @@ impl DurationManager {
                         available
                     })
                     .map(|alloc| alloc.daily_hours * (alloc.allocation_percentage / 100.0))
-                    .sum();
+                    .sum::<f64>();
 
                 if daily_capacity > 0.0 {
                     let work_done = daily_capacity.min(total_work_remaining);
@@ -240,7 +240,7 @@ impl DurationManager {
         let calendar_days = (current_date - start_date).num_days();
         let avg_utilization = resource_allocations.iter()
             .map(|alloc| alloc.allocation_percentage)
-            .sum::<f32>() / resource_allocations.len() as f32;
+            .sum::<f64>() / resource_allocations.len() as f64;
 
         Ok(DurationCalculation {
             estimated_duration_days: working_days,
@@ -254,7 +254,7 @@ impl DurationManager {
     }
 
     /// Calculate the calendar days needed for a given number of working days
-    fn calculate_calendar_days(working_days: f32, calendar: &Calendar) -> Result<i64> {
+    fn calculate_calendar_days(working_days: f64, calendar: &Calendar) -> Result<i64> {
         if working_days <= 0.0 {
             return Ok(0);
         }
@@ -293,19 +293,19 @@ impl DurationManager {
             .unwrap_or_else(|| Utc::now());
 
         let calendar_days = (latest_finish - earliest_start).num_days();
-        let working_days = calendar.calculate_working_days_between(
+        let working_days = calendar.working_days_between(
             earliest_start.date_naive(),
             latest_finish.date_naive(),
-        ) as f32;
+        ) as f64;
 
-        let total_effort: f32 = project.tasks.values()
+        let total_effort: f64 = project.tasks.values()
             .map(|task| task.estimated_hours)
             .sum();
 
         // Calculate average resource utilization
         let total_resources = project.resources.len();
         let avg_utilization = if total_resources > 0 {
-            let total_capacity = total_resources as f32 * working_days * 8.0;
+            let total_capacity = total_resources as f64 * working_days as f64 * 8.0;
             if total_capacity > 0.0 {
                 (total_effort / total_capacity) * 100.0
             } else {
@@ -330,7 +330,7 @@ impl DurationManager {
     pub fn optimize_task_duration(
         task: &Task,
         available_resources: &[Resource],
-        target_duration_days: f32,
+        target_duration_days: f64,
         calendar: &Calendar,
     ) -> Result<Vec<ResourceAllocation>> {
         if target_duration_days <= 0.0 {
@@ -377,10 +377,10 @@ impl DurationManager {
 
     /// Calculate duration variance and performance metrics
     pub fn calculate_duration_variance(
-        planned_duration: f32,
-        actual_duration: f32,
-        planned_effort: f32,
-        actual_effort: f32,
+        planned_duration: f64,
+        actual_duration: f64,
+        planned_effort: f64,
+        actual_effort: f64,
     ) -> DurationVarianceMetrics {
         let duration_variance = actual_duration - planned_duration;
         let duration_variance_percent = if planned_duration > 0.0 {
@@ -421,8 +421,8 @@ impl DurationManager {
 
     /// Categorize performance based on variance metrics
     fn categorize_performance(
-        duration_variance_percent: f32,
-        effort_variance_percent: f32,
+        duration_variance_percent: f64,
+        effort_variance_percent: f64,
     ) -> PerformanceCategory {
         match (duration_variance_percent, effort_variance_percent) {
             (d, e) if d <= -10.0 && e <= -10.0 => PerformanceCategory::Excellent,
@@ -436,7 +436,7 @@ impl DurationManager {
     /// Calculate critical path impact of duration changes
     pub fn analyze_critical_path_impact(
         task_id: Id,
-        duration_change_days: f32,
+        duration_change_days: f64,
         project: &Project,
     ) -> Result<CriticalPathImpact> {
         // This is a simplified analysis - full critical path analysis would require
@@ -471,7 +471,7 @@ impl DurationManager {
     }
 
     /// Suggest mitigation options for duration overruns
-    fn suggest_mitigation_options(duration_change_days: f32) -> Vec<String> {
+    fn suggest_mitigation_options(duration_change_days: f64) -> Vec<String> {
         let mut options = Vec::new();
 
         if duration_change_days > 0.0 {
@@ -492,12 +492,12 @@ impl DurationManager {
 
 #[derive(Debug, Clone)]
 pub struct DurationVarianceMetrics {
-    pub duration_variance_days: f32,
-    pub duration_variance_percent: f32,
-    pub effort_variance_hours: f32,
-    pub effort_variance_percent: f32,
-    pub productivity_hours_per_day: f32,
-    pub efficiency_ratio: f32,
+    pub duration_variance_days: f64,
+    pub duration_variance_percent: f64,
+    pub effort_variance_hours: f64,
+    pub effort_variance_percent: f64,
+    pub productivity_hours_per_day: f64,
+    pub efficiency_ratio: f64,
     pub performance_category: PerformanceCategory,
 }
 
@@ -513,8 +513,8 @@ pub enum PerformanceCategory {
 #[derive(Debug, Clone)]
 pub struct CriticalPathImpact {
     pub task_id: Id,
-    pub duration_change_days: f32,
-    pub project_delay_days: f32,
+    pub duration_change_days: f64,
+    pub project_delay_days: f64,
     pub affected_task_count: usize,
     pub affected_task_ids: Vec<Id>,
     pub is_critical_path: bool,

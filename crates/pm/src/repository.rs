@@ -111,6 +111,18 @@ impl ProjectRepository {
         self.resources.iter().find(|r| r.id == id)
     }
     
+    pub fn update_resource(&mut self, updated: Resource) -> Result<()> {
+        updated.validate()?;
+        if let Some(pos) = self.resources.iter().position(|r| r.id == updated.id) {
+            self.resources[pos] = updated;
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Resource with id {} not found", updated.id)
+            ))
+        }
+    }
+    
     // Milestone methods
     pub fn add_milestone(&mut self, milestone: Milestone) -> Result<()> {
         milestone.validate()?;
@@ -124,6 +136,18 @@ impl ProjectRepository {
     
     pub fn find_milestone_by_id(&self, id: Id) -> Option<&Milestone> {
         self.milestones.iter().find(|m| m.id == id)
+    }
+    
+    pub fn update_milestone(&mut self, updated: Milestone) -> Result<()> {
+        updated.validate()?;
+        if let Some(pos) = self.milestones.iter().position(|m| m.id == updated.id) {
+            self.milestones[pos] = updated;
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Milestone with id {} not found", updated.id)
+            ))
+        }
     }
     
     pub fn get_overdue_milestones(&self) -> Vec<&Milestone> {

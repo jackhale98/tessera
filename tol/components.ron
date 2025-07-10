@@ -1,0 +1,12 @@
+[
+    (
+        id: ("750ff42b-7a6f-4654-b22b-7ad7c356b417"),
+        name: "plate",
+        description: "test plate",
+        part_number: None,
+        features: [],
+        created: "2025-07-10T19:47:39.980995088Z",
+        updated: "2025-07-10T19:47:39.980995088Z",
+        metadata: {},
+    ),
+]

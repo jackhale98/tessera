@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::str::FromStr;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -48,5 +49,13 @@ impl From<Uuid> for Id {
 impl From<Id> for Uuid {
     fn from(id: Id) -> Self {
         id.0
+    }
+}
+
+impl FromStr for Id {
+    type Err = uuid::Error;
+    
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(Uuid::parse_str(s)?))
     }
 }

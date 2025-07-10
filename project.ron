@@ -1,9 +1,9 @@
 (
-    id: "project-276e85bd-3a76-4749-bc70-37c8563b954b",
-    name: "Sample Project",
+    id: "project-d3dfca19-c53d-47ea-825e-2c9a914dba8e",
+    name: "Test Project",
     version: "0.1.0",
-    description: "Testing cargo run",
-    created: "2025-07-10T17:45:50.923891065Z",
+    description: "Test project for tessera",
+    created: "2025-07-10T19:45:19.378465677Z",
     modules: [
         "pm",
         "quality",

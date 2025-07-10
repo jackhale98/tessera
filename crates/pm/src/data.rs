@@ -24,7 +24,7 @@ pub struct Task {
     pub metadata: IndexMap<String, String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum TaskStatus {
     NotStarted,
     InProgress,
@@ -33,7 +33,7 @@ pub enum TaskStatus {
     Cancelled,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum TaskPriority {
     Low,
     Medium,
@@ -129,6 +129,7 @@ pub struct Resource {
     pub email: Option<String>,
     pub role: String,
     pub hourly_rate: Option<f64>,
+    pub daily_hours: f64, // Standard daily working hours
     pub availability_percentage: f64, // 0.0 to 100.0
     pub skills: Vec<String>,
     pub created: DateTime<Utc>,
@@ -169,6 +170,7 @@ impl Resource {
             email: None,
             role,
             hourly_rate: None,
+            daily_hours: 8.0, // Standard 8-hour workday
             availability_percentage: 100.0,
             skills: Vec::new(),
             created: now,
@@ -273,6 +275,29 @@ impl TaskScheduleInfo {
             latest_finish: earliest_finish, // Will be updated by scheduling algorithm
             slack_days: 0,
             is_critical: false,
+        }
+    }
+}
+
+impl std::fmt::Display for TaskPriority {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TaskPriority::Low => write!(f, "Low"),
+            TaskPriority::Medium => write!(f, "Medium"),
+            TaskPriority::High => write!(f, "High"),
+            TaskPriority::Critical => write!(f, "Critical"),
+        }
+    }
+}
+
+impl std::fmt::Display for TaskStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TaskStatus::NotStarted => write!(f, "Not Started"),
+            TaskStatus::InProgress => write!(f, "In Progress"),
+            TaskStatus::OnHold => write!(f, "On Hold"),
+            TaskStatus::Completed => write!(f, "Completed"),
+            TaskStatus::Cancelled => write!(f, "Cancelled"),
         }
     }
 }

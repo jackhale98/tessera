@@ -358,14 +358,14 @@ impl QualityRiskScorer {
     /// Auto-calculate risk scores for all requirements in repository
     pub fn auto_calculate_all_risks(&self, repository: &mut QualityRepository) -> Result<Vec<(Id, CalculatedRiskScore)>> {
         let mut results = Vec::new();
-        let requirements = repository.get_all_requirements();
+        let requirements: Vec<_> = repository.get_all_requirements().to_vec();
 
         for requirement in requirements {
             match self.calculate_requirement_risk_score(&requirement, repository) {
                 Ok(score) => {
                     // Update the requirement's risk score
                     let mut updated_req = requirement.clone();
-                    updated_req.risk_score = score.total_score;
+                    updated_req.risk_score = Some(score.total_score as f64);
                     let _ = repository.update_requirement(updated_req); // Ignore errors for now
 
                     results.push((requirement.id, score));

@@ -142,6 +142,7 @@ async fn list_requirements(project_ctx: ProjectContext) -> Result<()> {
             RequirementStatus::Approved => "Approved".green(),
             RequirementStatus::Implemented => "Implemented".blue(),
             RequirementStatus::Verified => "Verified".green(),
+            RequirementStatus::Failed => "Failed".red(),
             RequirementStatus::Deprecated => "Deprecated".red(),
         };
         
@@ -493,6 +494,7 @@ async fn show_quality_dashboard(project_ctx: ProjectContext) -> Result<()> {
                 RequirementStatus::Approved => "Approved",
                 RequirementStatus::Implemented => "Implemented",
                 RequirementStatus::Verified => "Verified",
+                RequirementStatus::Failed => "Failed",
                 RequirementStatus::Deprecated => "Deprecated",
             };
             *status_counts.entry(status).or_insert(0) += 1;
