@@ -1,0 +1,14 @@
+(
+    id: "project-5c7ef317-5144-449f-9ddc-88c1477b033e",
+    name: "Test Project",
+    version: "0.1.0",
+    description: "A test project for the quality management system",
+    created: "2025-07-10T17:05:29.849436777Z",
+    modules: [
+        "pm",
+        "quality",
+        "tol",
+    ],
+    git_repo: None,
+    metadata: {},
+)

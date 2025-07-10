@@ -1,0 +1,21 @@
+[
+    (
+        id: ("d67ae44b-3deb-4470-ba76-3e32eb744e58"),
+        name: "test",
+        description: "test task",
+        status: NotStarted,
+        priority: Medium,
+        work_type: Design,
+        estimated_hours: 8.0,
+        actual_hours: 0.0,
+        start_date: None,
+        due_date: None,
+        completion_date: None,
+        dependencies: [],
+        assigned_resources: [],
+        progress_percentage: 0.0,
+        created: "2025-07-10T17:53:11.651988178Z",
+        updated: "2025-07-10T17:53:11.651988178Z",
+        metadata: {},
+    ),
+]

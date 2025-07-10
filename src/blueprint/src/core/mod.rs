@@ -1,0 +1,23 @@
+mod baseline;
+mod baseline_manager;
+mod calendar;
+mod calendar_import;
+mod issue;
+mod milestone;
+mod progress;
+mod project;
+mod resource;
+mod risk;
+mod task;
+
+pub use baseline::{ProjectBaseline, BaselineType, BaselineProjectSnapshot, BaselineComparison, BaselineVarianceSummary, ProjectHealth, VarianceType, MilestoneStatus};
+pub use baseline_manager::{BaselineManager, BaselineInfo, BaselineMetrics};
+pub use calendar::{Calendar, Holiday, WorkingHours, CalendarException, ExceptionType, ResourceCalendar};
+pub use calendar_import::CalendarImporter;
+pub use issue::{Issue, IssueRegistry, IssuePriority, IssueSeverity, IssueStatus, IssueCategory, IssueMetrics, EscalationLevel};
+pub use milestone::Milestone;
+pub use progress::{ProgressSnapshot, TaskProgress, EarnedValueMetrics, ProgressReport, TaskStatus, ProjectStatus};
+pub use project::Project;
+pub use resource::Resource;
+pub use risk::{Risk, RiskRegistry, RiskProbability, RiskImpact, RiskStatus, RiskCategory, RiskMetrics, RiskResponseType, ActionStatus, CommentType, BusinessImpact};
+pub use task::{Task, TaskPriority, ResourceAssignment, AllocationType, TaskDependency, DependencyType, TaskType};

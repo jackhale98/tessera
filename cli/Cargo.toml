@@ -1,0 +1,22 @@
+[package]
+name = "tessera"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "tessera"
+path = "src/main.rs"
+
+[dependencies]
+tessera-core = { path = "../crates/core" }
+tessera-quality = { path = "../crates/quality" }
+tessera-pm = { path = "../crates/pm" }
+tessera-tol = { path = "../crates/tol" }
+clap = { workspace = true }
+inquire = { workspace = true }
+anyhow = { workspace = true }
+colored = { workspace = true }
+comfy-table = { workspace = true }
+console = { workspace = true }
+tokio = { version = "1.0", features = ["full"] }
+dirs = { workspace = true }

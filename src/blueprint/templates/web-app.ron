@@ -1,0 +1,138 @@
+(
+    name: "Web Application",
+    start_date: "2024-01-08",
+    currency: "USD",
+    description: None,
+    resources: {
+        "sarah": (
+            name: "Sarah Johnson",
+            role: "Backend Developer",
+            hourly_rate: 85.0,
+            capacity: 1.0,
+            skills: ["backend", "python", "postgresql"],
+            calendar_id: None,
+            contact_info: None,
+        ),
+        "mike": (
+            name: "Mike Chen",
+            role: "Frontend Developer",
+            hourly_rate: 75.0,
+            capacity: 1.0,
+            skills: ["frontend", "react", "javascript"],
+            calendar_id: None,
+            contact_info: None,
+        ),
+    },
+    tasks: {
+        "database": (
+            name: "Database Setup",
+            description: None,
+            dependencies: [],
+            priority: Critical,
+            skills_required: [],
+            resource_assignments: {
+                "sarah": (
+                    resource_id: "sarah",
+                    allocation_type: Hours(32.0),
+                    start_date: None,
+                    end_date: None,
+                ),
+            },
+            duration_days: None,
+            start_date: None,
+            end_date: None,
+            completion: 0.0,
+            task_type: EffortDriven,
+            work_units: None,
+        ),
+        "auth": (
+            name: "Authentication System",
+            description: None,
+            dependencies: [
+                (
+                    task_id: "database",
+                    dependency_type: FinishToStart,
+                    lag_days: 0.0,
+                ),
+            ],
+            priority: Critical,
+            skills_required: [],
+            resource_assignments: {
+                "sarah": (
+                    resource_id: "sarah",
+                    allocation_type: Hours(60.0),
+                    start_date: None,
+                    end_date: None,
+                ),
+            },
+            duration_days: None,
+            start_date: None,
+            end_date: None,
+            completion: 0.0,
+            task_type: EffortDriven,
+            work_units: None,
+        ),
+        "frontend": (
+            name: "Frontend Application",
+            description: None,
+            dependencies: [
+                (
+                    task_id: "auth",
+                    dependency_type: FinishToStart,
+                    lag_days: 0.0,
+                ),
+            ],
+            priority: High,
+            skills_required: [],
+            resource_assignments: {
+                "mike": (
+                    resource_id: "mike",
+                    allocation_type: Hours(80.0),
+                    start_date: None,
+                    end_date: None,
+                ),
+            },
+            duration_days: None,
+            start_date: None,
+            end_date: None,
+            completion: 0.0,
+            task_type: EffortDriven,
+            work_units: None,
+        ),
+    },
+    milestones: {
+        "mvp": (
+            name: "MVP Launch",
+            description: None,
+            dependencies: ["frontend"],
+            target_date: Some("2024-03-15"),
+        ),
+    },
+    calendars: {
+        "default": (
+            name: "Default Calendar",
+            description: Some("Standard 8-hour workday, Monday to Friday"),
+            holidays: [],
+            working_days: [Mon, Tue, Wed, Thu, Fri],
+            working_hours: (
+                start_time: 9,
+                end_time: 17,
+                daily_hours: 8.0,
+            ),
+            exceptions: [],
+        ),
+    },
+    resource_calendars: [],
+    default_calendar_id: Some("default"),
+    baselines: {},
+    current_baseline_id: None,
+    progress_snapshots: {},
+    issue_registry: (
+        issues: {},
+        next_id: 1,
+    ),
+    risk_registry: (
+        risks: {},
+        next_id: 1,
+    ),
+)

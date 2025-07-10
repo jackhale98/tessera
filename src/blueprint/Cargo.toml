@@ -1,0 +1,55 @@
+[package]
+name = "blueprint"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "Text-based project management with modern tooling"
+license = "MIT"
+
+[dependencies]
+# CLI and User Interface
+clap = { version = "4.4", features = ["derive", "cargo"] }
+inquire = { version = "0.7", features = ["date"] }
+fuzzy-matcher = "0.3"
+
+# Data Format and Serialization
+ron = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Date and Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Error Handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# File System and Git
+git2 = "0.18"
+walkdir = "2.4"
+dirs = "5.0"
+
+# Utilities
+indexmap = { version = "2.1", features = ["serde"] }
+petgraph = "0.6"
+rayon = "1.8"
+
+# Terminal Output
+colored = "2.1"
+indicatif = "0.17"
+comfy-table = "7.1"
+
+# Templates
+include_dir = "0.7"
+
+# Image generation for Mermaid
+image = "0.24"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Calendar support
+ical = "0.10"
+
+[dev-dependencies]
+tempfile = "3.8"
+assert_cmd = "2.0"
+predicates = "3.0"

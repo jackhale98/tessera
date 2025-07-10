@@ -1,0 +1,17 @@
+[package]
+name = "tessera-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+uuid = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+ron = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+git2 = { workspace = true }
+walkdir = { workspace = true }
+dirs = { workspace = true }
+indexmap = { workspace = true }
+inquire = { workspace = true }

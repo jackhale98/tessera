@@ -1,0 +1,17 @@
+[package]
+name = "tessera-pm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tessera-core = { path = "../core" }
+serde = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+ron = { workspace = true }
+anyhow = { workspace = true }
+indexmap = { workspace = true }
+petgraph = { workspace = true }
+inquire = { workspace = true }
+colored = { workspace = true }
+comfy-table = { workspace = true }

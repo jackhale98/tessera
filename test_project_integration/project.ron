@@ -1,0 +1,14 @@
+(
+    id: "project-6c3c4c5c-0cb1-4c34-972c-570dc8fdbbb1",
+    name: "Test Project",
+    version: "0.1.0",
+    description: "Integration test project",
+    created: "2025-07-10T17:25:18.032670246Z",
+    modules: [
+        "pm",
+        "quality",
+        "tol",
+    ],
+    git_repo: None,
+    metadata: {},
+)

@@ -1,0 +1,22 @@
+[package]
+name = "tessera-quality"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tessera-core = { path = "../core" }
+uuid = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+ron = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+indexmap = { workspace = true }
+inquire = { workspace = true }
+console = { workspace = true }
+colored = { workspace = true }
+comfy-table = { workspace = true }
+rand = { workspace = true }
+rand_distr = { workspace = true }
+statrs = { workspace = true }
+fuzzy-matcher = { workspace = true }
