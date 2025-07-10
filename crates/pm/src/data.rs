@@ -24,7 +24,7 @@ pub struct Task {
     pub metadata: IndexMap<String, String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TaskStatus {
     NotStarted,
     InProgress,

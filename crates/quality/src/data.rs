@@ -352,6 +352,14 @@ pub enum RiskStatus {
     Closed,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum RiskLevel {
+    Low,
+    Medium,
+    High,
+    Critical,
+}
+
 impl Entity for Risk {
     fn id(&self) -> Id {
         self.id
