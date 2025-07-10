@@ -1,7 +1,7 @@
 use crate::LinkCommands;
 use colored::Colorize;
 use comfy_table::Table;
-use tessera_core::{ProjectContext, Result, CrossModuleLink, LinkType, Id};
+use tessera_core::{ProjectContext, Result, CrossModuleLink, LinkType, Id, EntityManager, EntitySelector, LinkingHelper, EntityBrowser};
 use inquire::{Select, Text};
 
 pub async fn execute_link_command(command: LinkCommands, mut project_ctx: ProjectContext) -> Result<()> {
@@ -17,12 +17,70 @@ pub async fn execute_link_command(command: LinkCommands, mut project_ctx: Projec
 async fn add_link_interactive(project_ctx: &mut ProjectContext) -> Result<()> {
     println!("{}", "Adding cross-module link".bold().blue());
     
+    // Try to use the new searchable entity system
+    let entity_manager = match EntityManager::load_from_project_path(&project_ctx.root_path) {
+        Ok(manager) => manager,
+        Err(_) => {
+            println!("{}", "Could not load entity information. Using legacy ID input mode.".yellow());
+            return add_link_legacy_mode(project_ctx).await;
+        }
+    };
+    
+    // Check if we have any entities loaded
+    if entity_manager.get_all_entities().is_empty() {
+        println!("{}", "No entities found in project. You can still create links manually.".yellow());
+        return add_link_legacy_mode(project_ctx).await;
+    }
+    
+    println!("{}", "Select source entity:".bold());
+    let source_entity = match EntitySelector::select_entity(
+        &entity_manager,
+        "Source entity to link from:",
+        None, // No module filter
+        None, // No entity type filter
+    )? {
+        Some(entity) => entity,
+        None => {
+            println!("{}", "Link creation cancelled".yellow());
+            return Ok(());
+        }
+    };
+    
+    println!("{}", format!("Selected source: {}", source_entity.display_name()).green());
+    
+    // Use the linking helper to create the link
+    let link = match LinkingHelper::create_cross_module_link(
+        &entity_manager,
+        &source_entity.module,
+        source_entity.id,
+    )? {
+        Some(link) => link,
+        None => {
+            println!("{}", "Link creation cancelled".yellow());
+            return Ok(());
+        }
+    };
+    
+    project_ctx.add_link(link.clone())?;
+    
+    println!("{} Link added successfully!", "✓".green());
+    println!("Link ID: {}", link.id);
+    if let Some(source_info) = entity_manager.find_entity(link.source_entity_id) {
+        println!("From: {} ({})", source_info.display_name(), source_info.module);
+    }
+    if let Some(target_info) = entity_manager.find_entity(link.target_entity_id) {
+        println!("To: {} ({})", target_info.display_name(), target_info.module);
+    }
+    
+    Ok(())
+}
+
+// Fallback to legacy mode if entity system isn't available
+async fn add_link_legacy_mode(project_ctx: &mut ProjectContext) -> Result<()> {
     let modules = vec!["quality", "pm", "tol"];
     
     let source_module = Select::new("Source module:", modules.clone()).prompt()?;
     
-    // For simplicity, we'll ask for entity ID directly
-    // In a real implementation, we'd list entities from the selected module
     let source_entity_id_str = Text::new("Source entity ID:")
         .with_help_message("Enter the UUID of the source entity")
         .prompt()?;

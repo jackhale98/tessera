@@ -1,14 +1,20 @@
+pub mod entity_manager;
+pub mod entity_selector;
 pub mod error;
 pub mod git;
 pub mod id;
+pub mod linking_helper;
 pub mod links;
 pub mod project;
 pub mod traits;
 pub mod utils;
 
+pub use entity_manager::*;
+pub use entity_selector::*;
 pub use error::*;
 pub use git::*;
 pub use id::*;
+pub use linking_helper::*;
 pub use links::*;
 pub use project::*;
 pub use traits::*;

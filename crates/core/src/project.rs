@@ -1,4 +1,4 @@
-use crate::{DesignTrackError, Id, Result, LinkRegistry};
+use crate::{DesignTrackError, Id, Result, LinkRegistry, EntityInfo, EntityBrowser};
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -115,5 +115,40 @@ impl ProjectContext {
     
     pub fn get_links_to(&self, module: &str, entity_id: Id) -> Vec<&crate::CrossModuleLink> {
         self.link_registry.get_links_to(module, entity_id)
+    }
+}
+
+impl EntityBrowser for ProjectContext {
+    fn get_all_entities(&self) -> Vec<EntityInfo> {
+        let mut entities = Vec::new();
+        
+        // For now, we'll implement a basic version that works with the existing system
+        // This can be enhanced once we have access to the module repositories
+        
+        // Add placeholder entities for testing
+        entities.extend(self.get_entities_by_module("quality"));
+        entities.extend(self.get_entities_by_module("pm"));
+        entities.extend(self.get_entities_by_module("tol"));
+        
+        entities
+    }
+    
+    fn get_entities_by_module(&self, _module: &str) -> Vec<EntityInfo> {
+        // For now, return empty vec. This will be implemented when we have access to module repositories
+        // The actual implementation will need to load each module's repository and extract entity info
+        Vec::new()
+    }
+    
+    fn get_entities_by_type(&self, entity_type: &str) -> Vec<EntityInfo> {
+        self.get_all_entities()
+            .into_iter()
+            .filter(|e| e.entity_type == entity_type)
+            .collect()
+    }
+    
+    fn find_entity(&self, id: Id) -> Option<EntityInfo> {
+        self.get_all_entities()
+            .into_iter()
+            .find(|e| e.id == id)
     }
 }

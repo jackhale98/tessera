@@ -31,6 +31,46 @@ pub trait LinkResolver {
     fn exists(&self, id: Id) -> bool;
 }
 
+#[derive(Debug, Clone)]
+pub struct EntityInfo {
+    pub id: Id,
+    pub name: String,
+    pub module: String,
+    pub entity_type: String,
+    pub description: Option<String>,
+}
+
+impl EntityInfo {
+    pub fn new(id: Id, name: String, module: String, entity_type: String) -> Self {
+        Self {
+            id,
+            name,
+            module,
+            entity_type,
+            description: None,
+        }
+    }
+    
+    pub fn with_description(mut self, description: String) -> Self {
+        self.description = Some(description);
+        self
+    }
+    
+    pub fn display_name(&self) -> String {
+        match &self.description {
+            Some(desc) => format!("{}: {} - {}", self.entity_type, self.name, desc),
+            None => format!("{}: {}", self.entity_type, self.name),
+        }
+    }
+}
+
+pub trait EntityBrowser {
+    fn get_all_entities(&self) -> Vec<EntityInfo>;
+    fn get_entities_by_module(&self, module: &str) -> Vec<EntityInfo>;
+    fn get_entities_by_type(&self, entity_type: &str) -> Vec<EntityInfo>;
+    fn find_entity(&self, id: Id) -> Option<EntityInfo>;
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Link {
     pub id: Id,

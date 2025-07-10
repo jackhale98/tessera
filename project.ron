@@ -1,9 +1,9 @@
 (
-    id: "project-d3dfca19-c53d-47ea-825e-2c9a914dba8e",
+    id: "project-7e672479-5880-456a-9d8b-bb9f58a00e59",
     name: "Test Project",
     version: "0.1.0",
-    description: "Test project for tessera",
-    created: "2025-07-10T19:45:19.378465677Z",
+    description: "Test project for linking functionality",
+    created: "2025-07-10T20:29:15.741384131Z",
     modules: [
         "pm",
         "quality",
