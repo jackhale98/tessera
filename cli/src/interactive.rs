@@ -77,87 +77,199 @@ async fn run_quality_interactive(project_ctx: ProjectContext) -> Result<()> {
         println!("\n{}", "Quality Management".bold().blue());
         
         let options = vec![
-            "Add Requirement",
-            "List Requirements",
-            "Add Design Input",
-            "List Design Inputs",
-            "Add Design Output",
-            "List Design Outputs",
-            "Add Design Control",
-            "List Design Controls",
-            "Add Risk",
-            "List Risks",
-            "Link Input to Requirement",
-            "Link Output to Requirement",
-            "Link Output to Input",
-            "Link Control to Output",
-            "Assess Risks",
-            "Risk Scoring Tools",
-            "Traceability Matrix",
-            "Quality Dashboard",
-            "Back to Main Menu",
+            "📋 Manage Entities",
+            "🔗 Link Entities", 
+            "📊 Analysis Tools",
+            "📈 Dashboard",
+            "← Back to Main Menu",
         ];
         
-        let selection = Select::new("Select action:", options)
-            .with_help_message("Choose a quality management action")
+        let selection = Select::new("Select category:", options)
+            .with_help_message("Choose a quality management category")
             .prompt()?;
         
         let result = match selection {
-            "Add Requirement" => {
-                execute_quality_command(QualityCommands::AddRequirement, project_ctx.clone()).await
+            "📋 Manage Entities" => {
+                run_quality_manage_menu(project_ctx.clone()).await
             },
-            "List Requirements" => {
-                execute_quality_command(QualityCommands::ListRequirements, project_ctx.clone()).await
+            "🔗 Link Entities" => {
+                run_quality_link_menu(project_ctx.clone()).await
             },
-            "Add Design Input" => {
-                execute_quality_command(QualityCommands::AddInput, project_ctx.clone()).await
+            "📊 Analysis Tools" => {
+                run_quality_analysis_menu(project_ctx.clone()).await
             },
-            "List Design Inputs" => {
-                execute_quality_command(QualityCommands::ListInputs, project_ctx.clone()).await
-            },
-            "Add Design Output" => {
-                execute_quality_command(QualityCommands::AddOutput, project_ctx.clone()).await
-            },
-            "List Design Outputs" => {
-                execute_quality_command(QualityCommands::ListOutputs, project_ctx.clone()).await
-            },
-            "Add Design Control" => {
-                execute_quality_command(QualityCommands::AddControl, project_ctx.clone()).await
-            },
-            "List Design Controls" => {
-                execute_quality_command(QualityCommands::ListControls, project_ctx.clone()).await
-            },
-            "Add Risk" => {
-                execute_quality_command(QualityCommands::AddRisk, project_ctx.clone()).await
-            },
-            "List Risks" => {
-                execute_quality_command(QualityCommands::ListRisks, project_ctx.clone()).await
-            },
-            "Link Input to Requirement" => {
-                execute_quality_command(QualityCommands::LinkInputToRequirement, project_ctx.clone()).await
-            },
-            "Link Output to Requirement" => {
-                execute_quality_command(QualityCommands::LinkOutputToRequirement, project_ctx.clone()).await
-            },
-            "Link Output to Input" => {
-                execute_quality_command(QualityCommands::LinkOutputToInput, project_ctx.clone()).await
-            },
-            "Link Control to Output" => {
-                execute_quality_command(QualityCommands::LinkControlToOutput, project_ctx.clone()).await
-            },
-            "Assess Risks" => {
-                execute_quality_command(QualityCommands::AssessRisks, project_ctx.clone()).await
-            },
-            "Risk Scoring Tools" => {
-                execute_quality_command(QualityCommands::RiskScoring, project_ctx.clone()).await
-            },
-            "Traceability Matrix" => {
-                execute_quality_command(QualityCommands::TraceabilityMatrix, project_ctx.clone()).await
-            },
-            "Quality Dashboard" => {
+            "📈 Dashboard" => {
                 execute_quality_command(QualityCommands::Dashboard, project_ctx.clone()).await
             },
-            "Back to Main Menu" => {
+            "← Back to Main Menu" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+async fn run_quality_manage_menu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Quality Management - Manage Entities".bold().blue());
+        
+        let options = vec![
+            "📝 Requirements",
+            "📥 Design Inputs",
+            "📤 Design Outputs", 
+            "🎯 Design Controls",
+            "⚠️  Risks",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select entity type:", options)
+            .with_help_message("Choose what to manage")
+            .prompt()?;
+        
+        let result = match selection {
+            "📝 Requirements" => {
+                run_entity_actions_menu("Requirements", &[
+                    ("Add Requirement", QualityCommands::AddRequirement),
+                    ("List Requirements", QualityCommands::ListRequirements),
+                ], project_ctx.clone()).await
+            },
+            "📥 Design Inputs" => {
+                run_entity_actions_menu("Design Inputs", &[
+                    ("Add Design Input", QualityCommands::AddInput),
+                    ("List Design Inputs", QualityCommands::ListInputs),
+                ], project_ctx.clone()).await
+            },
+            "📤 Design Outputs" => {
+                run_entity_actions_menu("Design Outputs", &[
+                    ("Add Design Output", QualityCommands::AddOutput),
+                    ("List Design Outputs", QualityCommands::ListOutputs),
+                ], project_ctx.clone()).await
+            },
+            "🎯 Design Controls" => {
+                run_entity_actions_menu("Design Controls", &[
+                    ("Add Design Control", QualityCommands::AddControl),
+                    ("List Design Controls", QualityCommands::ListControls),
+                ], project_ctx.clone()).await
+            },
+            "⚠️  Risks" => {
+                run_entity_actions_menu("Risks", &[
+                    ("Add Risk", QualityCommands::AddRisk),
+                    ("List Risks", QualityCommands::ListRisks),
+                ], project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+async fn run_entity_actions_menu(entity_type: &str, actions: &[(&str, QualityCommands)], project_ctx: ProjectContext) -> Result<()> {
+    println!("\n{}", format!("Quality Management - {}", entity_type).bold().blue());
+    
+    let mut options: Vec<String> = actions.iter().map(|(name, _)| name.to_string()).collect();
+    options.push("← Back".to_string());
+    
+    let selection = Select::new("Select action:", options)
+        .with_help_message(&format!("Choose action for {}", entity_type.to_lowercase()))
+        .prompt()?;
+    
+    if selection == "← Back" {
+        return Ok(());
+    }
+    
+    for (action_name, command) in actions {
+        if selection == *action_name {
+            execute_quality_command(command.clone(), project_ctx).await?;
+            break;
+        }
+    }
+    
+    Ok(())
+}
+
+async fn run_quality_link_menu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Quality Management - Link Entities".bold().blue());
+        
+        let options = vec![
+            "📥➡️📝 Link Input to Requirement",
+            "📤➡️📝 Link Output to Requirement",
+            "📤➡️📥 Link Output to Input",
+            "🎯➡️📤 Link Control to Output",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select linking action:", options)
+            .with_help_message("Choose entities to link")
+            .prompt()?;
+        
+        let result = match selection {
+            "📥➡️📝 Link Input to Requirement" => {
+                execute_quality_command(QualityCommands::LinkInputToRequirement, project_ctx.clone()).await
+            },
+            "📤➡️📝 Link Output to Requirement" => {
+                execute_quality_command(QualityCommands::LinkOutputToRequirement, project_ctx.clone()).await
+            },
+            "📤➡️📥 Link Output to Input" => {
+                execute_quality_command(QualityCommands::LinkOutputToInput, project_ctx.clone()).await
+            },
+            "🎯➡️📤 Link Control to Output" => {
+                execute_quality_command(QualityCommands::LinkControlToOutput, project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+async fn run_quality_analysis_menu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Quality Management - Analysis Tools".bold().blue());
+        
+        let options = vec![
+            "⚠️  Assess Risks",
+            "📊 Risk Scoring Tools",
+            "🔍 Traceability Matrix",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select analysis tool:", options)
+            .with_help_message("Choose analysis to run")
+            .prompt()?;
+        
+        let result = match selection {
+            "⚠️  Assess Risks" => {
+                execute_quality_command(QualityCommands::AssessRisks, project_ctx.clone()).await
+            },
+            "📊 Risk Scoring Tools" => {
+                execute_quality_command(QualityCommands::RiskScoring, project_ctx.clone()).await
+            },
+            "🔍 Traceability Matrix" => {
+                execute_quality_command(QualityCommands::TraceabilityMatrix, project_ctx.clone()).await
+            },
+            "← Back" => {
                 break;
             },
             _ => Ok(()),
@@ -198,39 +310,27 @@ async fn run_pm_interactive(project_ctx: ProjectContext) -> Result<()> {
         println!("\n{}", "Project Management".bold().blue());
         
         let options = vec![
-            "Add Task",
-            "List Tasks",
-            "Add Resource",
-            "Add Milestone",
-            "Compute Schedule",
-            "PM Dashboard",
-            "Back to Main Menu",
+            "📋 Manage Project",
+            "📅 Scheduling",
+            "📈 Dashboard",
+            "← Back to Main Menu",
         ];
         
-        let selection = Select::new("Select action:", options)
-            .with_help_message("Choose a project management action")
+        let selection = Select::new("Select category:", options)
+            .with_help_message("Choose a project management category")
             .prompt()?;
         
         let result = match selection {
-            "Add Task" => {
-                execute_pm_command(PmCommands::AddTask, project_ctx.clone()).await
+            "📋 Manage Project" => {
+                run_pm_manage_menu(project_ctx.clone()).await
             },
-            "List Tasks" => {
-                execute_pm_command(PmCommands::ListTasks, project_ctx.clone()).await
-            },
-            "Add Resource" => {
-                execute_pm_command(PmCommands::AddResource, project_ctx.clone()).await
-            },
-            "Add Milestone" => {
-                execute_pm_command(PmCommands::AddMilestone, project_ctx.clone()).await
-            },
-            "Compute Schedule" => {
+            "📅 Scheduling" => {
                 execute_pm_command(PmCommands::Schedule, project_ctx.clone()).await
             },
-            "PM Dashboard" => {
+            "📈 Dashboard" => {
                 execute_pm_command(PmCommands::Dashboard, project_ctx.clone()).await
             },
-            "Back to Main Menu" => {
+            "← Back to Main Menu" => {
                 break;
             },
             _ => Ok(()),
@@ -244,72 +344,214 @@ async fn run_pm_interactive(project_ctx: ProjectContext) -> Result<()> {
     Ok(())
 }
 
+async fn run_pm_manage_menu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Project Management - Manage Project".bold().blue());
+        
+        let options = vec![
+            "✅ Tasks",
+            "👥 Resources",
+            "🏁 Milestones",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select what to manage:", options)
+            .with_help_message("Choose project elements to manage")
+            .prompt()?;
+        
+        let result = match selection {
+            "✅ Tasks" => {
+                run_pm_entity_actions_menu("Tasks", &[
+                    ("Add Task", PmCommands::AddTask),
+                    ("List Tasks", PmCommands::ListTasks),
+                ], project_ctx.clone()).await
+            },
+            "👥 Resources" => {
+                execute_pm_command(PmCommands::AddResource, project_ctx.clone()).await
+            },
+            "🏁 Milestones" => {
+                execute_pm_command(PmCommands::AddMilestone, project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+async fn run_pm_entity_actions_menu(entity_type: &str, actions: &[(&str, PmCommands)], project_ctx: ProjectContext) -> Result<()> {
+    println!("\n{}", format!("Project Management - {}", entity_type).bold().blue());
+    
+    let mut options: Vec<String> = actions.iter().map(|(name, _)| name.to_string()).collect();
+    options.push("← Back".to_string());
+    
+    let selection = Select::new("Select action:", options)
+        .with_help_message(&format!("Choose action for {}", entity_type.to_lowercase()))
+        .prompt()?;
+    
+    if selection == "← Back" {
+        return Ok(());
+    }
+    
+    for (action_name, command) in actions {
+        if selection == *action_name {
+            execute_pm_command(command.clone(), project_ctx).await?;
+            break;
+        }
+    }
+    
+    Ok(())
+}
+
 async fn run_tol_interactive(project_ctx: ProjectContext) -> Result<()> {
     loop {
         println!("\n{}", "Tolerance Analysis".bold().blue());
         
         let options = vec![
-            "Add Component",
-            "Edit Component",
-            "List Components",
-            "Add Feature",
-            "Edit Feature",
-            "Add Mate",
-            "Edit Mate",
-            "List Mates",
-            "Add Stackup",
-            "Edit Stackup",
-            "Run Analysis",
-            "Edit Analysis Settings",
-            "Tolerance Dashboard",
-            "Back to Main Menu",
+            "🔧 Manage Model",
+            "📊 Run Analysis",
+            "📈 Dashboard",
+            "← Back to Main Menu",
         ];
         
-        let selection = Select::new("Select action:", options)
-            .with_help_message("Choose a tolerance analysis action")
+        let selection = Select::new("Select category:", options)
+            .with_help_message("Choose a tolerance analysis category")
             .prompt()?;
         
         let result = match selection {
-            "Add Component" => {
-                execute_tol_command(TolCommands::AddComponent, project_ctx.clone()).await
+            "🔧 Manage Model" => {
+                run_tol_manage_menu(project_ctx.clone()).await
             },
-            "Edit Component" => {
-                execute_tol_command(TolCommands::EditComponent, project_ctx.clone()).await
+            "📊 Run Analysis" => {
+                run_tol_analysis_menu(project_ctx.clone()).await
             },
-            "List Components" => {
-                execute_tol_command(TolCommands::ListComponents, project_ctx.clone()).await
-            },
-            "Add Feature" => {
-                execute_tol_command(TolCommands::AddFeature, project_ctx.clone()).await
-            },
-            "Edit Feature" => {
-                execute_tol_command(TolCommands::EditFeature, project_ctx.clone()).await
-            },
-            "Add Mate" => {
-                execute_tol_command(TolCommands::AddMate, project_ctx.clone()).await
-            },
-            "Edit Mate" => {
-                execute_tol_command(TolCommands::EditMate, project_ctx.clone()).await
-            },
-            "List Mates" => {
-                execute_tol_command(TolCommands::ListMates, project_ctx.clone()).await
-            },
-            "Add Stackup" => {
-                execute_tol_command(TolCommands::AddStackup, project_ctx.clone()).await
-            },
-            "Edit Stackup" => {
-                execute_tol_command(TolCommands::EditStackup, project_ctx.clone()).await
-            },
-            "Run Analysis" => {
-                execute_tol_command(TolCommands::RunAnalysis, project_ctx.clone()).await
-            },
-            "Edit Analysis Settings" => {
-                execute_tol_command(TolCommands::ConfigureAnalysis, project_ctx.clone()).await
-            },
-            "Tolerance Dashboard" => {
+            "📈 Dashboard" => {
                 execute_tol_command(TolCommands::Dashboard, project_ctx.clone()).await
             },
-            "Back to Main Menu" => {
+            "← Back to Main Menu" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+async fn run_tol_manage_menu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Tolerance Analysis - Manage Model".bold().blue());
+        
+        let options = vec![
+            "📜 Components",
+            "📎 Features",
+            "🔗 Mates",
+            "📊 Stackups",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select what to manage:", options)
+            .with_help_message("Choose model elements to manage")
+            .prompt()?;
+        
+        let result = match selection {
+            "📜 Components" => {
+                run_tol_entity_actions_menu("Components", &[
+                    ("Add Component", TolCommands::AddComponent),
+                    ("Edit Component", TolCommands::EditComponent),
+                    ("List Components", TolCommands::ListComponents),
+                ], project_ctx.clone()).await
+            },
+            "📎 Features" => {
+                run_tol_entity_actions_menu("Features", &[
+                    ("Add Feature", TolCommands::AddFeature),
+                    ("Edit Feature", TolCommands::EditFeature),
+                ], project_ctx.clone()).await
+            },
+            "🔗 Mates" => {
+                run_tol_entity_actions_menu("Mates", &[
+                    ("Add Mate", TolCommands::AddMate),
+                    ("Edit Mate", TolCommands::EditMate),
+                    ("List Mates", TolCommands::ListMates),
+                ], project_ctx.clone()).await
+            },
+            "📊 Stackups" => {
+                run_tol_entity_actions_menu("Stackups", &[
+                    ("Add Stackup", TolCommands::AddStackup),
+                    ("Edit Stackup", TolCommands::EditStackup),
+                ], project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+async fn run_tol_entity_actions_menu(entity_type: &str, actions: &[(&str, TolCommands)], project_ctx: ProjectContext) -> Result<()> {
+    println!("\n{}", format!("Tolerance Analysis - {}", entity_type).bold().blue());
+    
+    let mut options: Vec<String> = actions.iter().map(|(name, _)| name.to_string()).collect();
+    options.push("← Back".to_string());
+    
+    let selection = Select::new("Select action:", options)
+        .with_help_message(&format!("Choose action for {}", entity_type.to_lowercase()))
+        .prompt()?;
+    
+    if selection == "← Back" {
+        return Ok(());
+    }
+    
+    for (action_name, command) in actions {
+        if selection == *action_name {
+            execute_tol_command(command.clone(), project_ctx).await?;
+            break;
+        }
+    }
+    
+    Ok(())
+}
+
+async fn run_tol_analysis_menu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Tolerance Analysis - Run Analysis".bold().blue());
+        
+        let options = vec![
+            "🏃 Run Analysis",
+            "⚙️  Configure Analysis Settings",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select analysis action:", options)
+            .with_help_message("Choose analysis to run or configure")
+            .prompt()?;
+        
+        let result = match selection {
+            "🏃 Run Analysis" => {
+                execute_tol_command(TolCommands::RunAnalysis, project_ctx.clone()).await
+            },
+            "⚙️  Configure Analysis Settings" => {
+                execute_tol_command(TolCommands::ConfigureAnalysis, project_ctx.clone()).await
+            },
+            "← Back" => {
                 break;
             },
             _ => Ok(()),

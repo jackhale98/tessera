@@ -73,7 +73,7 @@ enum Commands {
     },
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 enum QualityCommands {
     /// Add a new requirement
     #[command(name = "req:add")]
@@ -147,7 +147,7 @@ enum QualityCommands {
     Dashboard,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 enum PmCommands {
     /// Add a new task
     #[command(name = "task:add")]
@@ -172,7 +172,7 @@ enum PmCommands {
     Dashboard,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 enum TolCommands {
     /// Add a new component
     #[command(name = "component:add")]

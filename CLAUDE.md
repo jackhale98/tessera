@@ -52,9 +52,20 @@ cargo run -- interactive
 cargo run -- quality req:add
 cargo run -- quality req:list
 cargo run -- quality input:add
+cargo run -- quality input:list
 cargo run -- quality input:link-req
+cargo run -- quality output:add
+cargo run -- quality output:list
+cargo run -- quality output:link-req
+cargo run -- quality output:link-input
+cargo run -- quality control:add
+cargo run -- quality control:list
+cargo run -- quality control:link-output
 cargo run -- quality risk:add
+cargo run -- quality risk:list
 cargo run -- quality risk:assess
+cargo run -- quality risk:score
+cargo run -- quality trace:matrix
 cargo run -- quality dashboard
 
 # Project management commands
@@ -80,6 +91,13 @@ cargo run -- validate
 cargo run -- interactive --module quality
 cargo run -- interactive --module pm
 cargo run -- interactive --module tol
+
+# Cross-module linking commands
+cargo run -- link add
+cargo run -- link list
+cargo run -- link show
+cargo run -- link remove
+cargo run -- link validate
 ```
 
 ## Architecture
@@ -232,4 +250,9 @@ cargo check -p tessera-tol
 # Run tests for specific crate
 cargo test -p tessera-core
 cargo test -p tessera-quality
+cargo test -p tessera-pm
+cargo test -p tessera-tol
+
+# Run tests for CLI application
+cargo test -p tessera
 ```
