@@ -81,6 +81,18 @@ impl ToleranceRepository {
         self.components.iter().find(|c| c.id == id)
     }
     
+    pub fn update_component(&mut self, updated: Component) -> Result<()> {
+        updated.validate()?;
+        if let Some(pos) = self.components.iter().position(|c| c.id == updated.id) {
+            self.components[pos] = updated;
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Component with id {} not found", updated.id)
+            ))
+        }
+    }
+    
     // Feature methods
     pub fn add_feature(&mut self, feature: Feature) -> Result<()> {
         feature.validate()?;
@@ -100,6 +112,18 @@ impl ToleranceRepository {
         self.features.iter().filter(|f| f.component_id == component_id).collect()
     }
     
+    pub fn update_feature(&mut self, updated: Feature) -> Result<()> {
+        updated.validate()?;
+        if let Some(pos) = self.features.iter().position(|f| f.id == updated.id) {
+            self.features[pos] = updated;
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Feature with id {} not found", updated.id)
+            ))
+        }
+    }
+    
     // Mate methods
     pub fn add_mate(&mut self, mate: Mate) -> Result<()> {
         mate.validate()?;
@@ -113,6 +137,18 @@ impl ToleranceRepository {
     
     pub fn find_mate_by_id(&self, id: Id) -> Option<&Mate> {
         self.mates.iter().find(|m| m.id == id)
+    }
+    
+    pub fn update_mate(&mut self, updated: Mate) -> Result<()> {
+        updated.validate()?;
+        if let Some(pos) = self.mates.iter().position(|m| m.id == updated.id) {
+            self.mates[pos] = updated;
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Mate with id {} not found", updated.id)
+            ))
+        }
     }
     
     // Stackup methods

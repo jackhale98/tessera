@@ -142,6 +142,10 @@ enum TolCommands {
     #[command(name = "component:add")]
     AddComponent,
     
+    /// Edit a component
+    #[command(name = "component:edit")]
+    EditComponent,
+    
     /// List components
     #[command(name = "component:list")]
     ListComponents,
@@ -150,13 +154,37 @@ enum TolCommands {
     #[command(name = "feature:add")]
     AddFeature,
     
+    /// Edit a feature
+    #[command(name = "feature:edit")]
+    EditFeature,
+    
+    /// Add a mate
+    #[command(name = "mate:add")]
+    AddMate,
+    
+    /// Edit a mate
+    #[command(name = "mate:edit")]
+    EditMate,
+    
+    /// List mates
+    #[command(name = "mate:list")]
+    ListMates,
+    
     /// Add a stackup
     #[command(name = "stackup:add")]
     AddStackup,
     
+    /// Edit a stackup
+    #[command(name = "stackup:edit")]
+    EditStackup,
+    
     /// Run tolerance analysis
     #[command(name = "analysis:run")]
     RunAnalysis,
+    
+    /// Configure analysis settings
+    #[command(name = "analysis:config")]
+    ConfigureAnalysis,
     
     /// Tolerance analysis dashboard
     Dashboard,

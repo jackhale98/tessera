@@ -178,6 +178,7 @@ impl ProcessCapabilityAnalyzer {
             ToleranceDistribution::Normal => DistributionType::Normal,
             ToleranceDistribution::Uniform => DistributionType::Uniform,
             ToleranceDistribution::Triangular => DistributionType::Triangular,
+            ToleranceDistribution::LogNormal => DistributionType::LogNormal,
             ToleranceDistribution::Beta { .. } => DistributionType::Normal, // Fallback
         };
 

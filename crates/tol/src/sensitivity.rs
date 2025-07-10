@@ -135,6 +135,7 @@ impl SensitivityAnalyzer {
             ToleranceDistribution::Normal => crate::distributions::DistributionType::Normal,
             ToleranceDistribution::Uniform => crate::distributions::DistributionType::Uniform,
             ToleranceDistribution::Triangular => crate::distributions::DistributionType::Triangular,
+            ToleranceDistribution::LogNormal => crate::distributions::DistributionType::LogNormal,
             ToleranceDistribution::Beta { .. } => crate::distributions::DistributionType::Normal, // Fallback
         };
 

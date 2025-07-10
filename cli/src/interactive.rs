@@ -214,10 +214,17 @@ async fn run_tol_interactive(project_ctx: ProjectContext) -> Result<()> {
         
         let options = vec![
             "Add Component",
+            "Edit Component",
             "List Components",
             "Add Feature",
+            "Edit Feature",
+            "Add Mate",
+            "Edit Mate",
+            "List Mates",
             "Add Stackup",
+            "Edit Stackup",
             "Run Analysis",
+            "Edit Analysis Settings",
             "Tolerance Dashboard",
             "Back to Main Menu",
         ];
@@ -230,17 +237,38 @@ async fn run_tol_interactive(project_ctx: ProjectContext) -> Result<()> {
             "Add Component" => {
                 execute_tol_command(TolCommands::AddComponent, project_ctx.clone()).await
             },
+            "Edit Component" => {
+                execute_tol_command(TolCommands::EditComponent, project_ctx.clone()).await
+            },
             "List Components" => {
                 execute_tol_command(TolCommands::ListComponents, project_ctx.clone()).await
             },
             "Add Feature" => {
                 execute_tol_command(TolCommands::AddFeature, project_ctx.clone()).await
             },
+            "Edit Feature" => {
+                execute_tol_command(TolCommands::EditFeature, project_ctx.clone()).await
+            },
+            "Add Mate" => {
+                execute_tol_command(TolCommands::AddMate, project_ctx.clone()).await
+            },
+            "Edit Mate" => {
+                execute_tol_command(TolCommands::EditMate, project_ctx.clone()).await
+            },
+            "List Mates" => {
+                execute_tol_command(TolCommands::ListMates, project_ctx.clone()).await
+            },
             "Add Stackup" => {
                 execute_tol_command(TolCommands::AddStackup, project_ctx.clone()).await
             },
+            "Edit Stackup" => {
+                execute_tol_command(TolCommands::EditStackup, project_ctx.clone()).await
+            },
             "Run Analysis" => {
                 execute_tol_command(TolCommands::RunAnalysis, project_ctx.clone()).await
+            },
+            "Edit Analysis Settings" => {
+                execute_tol_command(TolCommands::ConfigureAnalysis, project_ctx.clone()).await
             },
             "Tolerance Dashboard" => {
                 execute_tol_command(TolCommands::Dashboard, project_ctx.clone()).await

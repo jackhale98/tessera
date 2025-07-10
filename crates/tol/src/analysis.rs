@@ -1,7 +1,7 @@
 use crate::data::*;
 use tessera_core::Result;
 use rand::Rng;
-use rand_distr::{Distribution, Normal, Uniform, Triangular};
+use rand_distr::{Distribution, Normal, Uniform, Triangular, LogNormal};
 use statrs::distribution::Beta;
 
 pub struct ToleranceAnalyzer {
@@ -35,6 +35,40 @@ impl ToleranceAnalyzer {
             stackup_id: stackup.id,
             stackup_name: stackup.name.clone(),
             config: self.config.clone(),
+            feature_contributions: Vec::new(), // Will be populated by caller
+            results,
+            created: chrono::Utc::now(),
+        })
+    }
+    
+    pub fn analyze_stackup_with_contributions(&self, stackup: &Stackup, features: &[Feature], contributions: &[FeatureContribution]) -> Result<StackupAnalysis> {
+        if contributions.is_empty() {
+            return Err(tessera_core::DesignTrackError::Validation(
+                "No feature contributions specified".to_string()
+            ));
+        }
+        
+        let stackup_features: Vec<&Feature> = contributions.iter()
+            .filter_map(|contrib| features.iter().find(|f| f.id == contrib.feature_id))
+            .collect();
+        
+        if stackup_features.is_empty() {
+            return Err(tessera_core::DesignTrackError::Validation(
+                "No valid features found for contributions".to_string()
+            ));
+        }
+        
+        let results = match self.config.method {
+            AnalysisMethod::WorstCase => self.worst_case_analysis_with_contributions(&stackup_features, contributions),
+            AnalysisMethod::RootSumSquare => self.root_sum_square_analysis_with_contributions(&stackup_features, contributions),
+            AnalysisMethod::MonteCarlo => self.monte_carlo_analysis_with_contributions(&stackup_features, contributions)?,
+        };
+        
+        Ok(StackupAnalysis {
+            stackup_id: stackup.id,
+            stackup_name: stackup.name.clone(),
+            config: self.config.clone(),
+            feature_contributions: contributions.to_vec(),
             results,
             created: chrono::Utc::now(),
         })
@@ -177,6 +211,19 @@ impl ToleranceAnalyzer {
                 })?;
                 triangular.sample(rng)
             },
+            ToleranceDistribution::LogNormal => {
+                if low <= 0.0 {
+                    return Err(tessera_core::DesignTrackError::Validation(
+                        "LogNormal distribution requires positive values".to_string()
+                    ));
+                }
+                let log_mean = feature.nominal.ln();
+                let log_std = (feature.tolerance.plus + feature.tolerance.minus) / (6.0 * feature.nominal);
+                let log_normal = LogNormal::new(log_mean, log_std).map_err(|e| {
+                    tessera_core::DesignTrackError::Module(format!("Failed to create log-normal distribution: {}", e))
+                })?;
+                log_normal.sample(rng)
+            },
             ToleranceDistribution::Beta { alpha, beta } => {
                 let beta_dist = Beta::new(*alpha, *beta).map_err(|e| {
                     tessera_core::DesignTrackError::Module(format!("Failed to create beta distribution: {}", e))
@@ -188,6 +235,119 @@ impl ToleranceAnalyzer {
         };
         
         Ok(sample)
+    }
+    
+    fn worst_case_analysis_with_contributions(&self, features: &[&Feature], contributions: &[FeatureContribution]) -> AnalysisResults {
+        let mut nominal_dimension = 0.0;
+        let mut plus_tolerance = 0.0;
+        let mut minus_tolerance = 0.0;
+        
+        for (feature, contribution) in features.iter().zip(contributions.iter()) {
+            let multiplier = if contribution.half_count { 0.5 } else { 1.0 };
+            let direction_multiplier = contribution.direction * multiplier;
+            
+            nominal_dimension += feature.nominal * direction_multiplier;
+            plus_tolerance += feature.tolerance.plus * direction_multiplier.abs();
+            minus_tolerance += feature.tolerance.minus * direction_multiplier.abs();
+        }
+        
+        let predicted_tolerance = Tolerance {
+            plus: plus_tolerance,
+            minus: minus_tolerance,
+            distribution: ToleranceDistribution::Uniform,
+        };
+        
+        AnalysisResults {
+            nominal_dimension,
+            predicted_tolerance,
+            cp: 1.0,
+            cpk: 0.8,
+            sigma_level: 3.0,
+            yield_percentage: 99.73,
+            distribution_data: None,
+        }
+    }
+    
+    fn root_sum_square_analysis_with_contributions(&self, features: &[&Feature], contributions: &[FeatureContribution]) -> AnalysisResults {
+        let mut nominal_dimension = 0.0;
+        let mut plus_variance = 0.0;
+        let mut minus_variance = 0.0;
+        
+        for (feature, contribution) in features.iter().zip(contributions.iter()) {
+            let multiplier = if contribution.half_count { 0.5 } else { 1.0 };
+            let direction_multiplier = contribution.direction * multiplier;
+            
+            nominal_dimension += feature.nominal * direction_multiplier;
+            plus_variance += (feature.tolerance.plus * direction_multiplier).powi(2);
+            minus_variance += (feature.tolerance.minus * direction_multiplier).powi(2);
+        }
+        
+        let predicted_tolerance = Tolerance {
+            plus: plus_variance.sqrt(),
+            minus: minus_variance.sqrt(),
+            distribution: ToleranceDistribution::Normal,
+        };
+        
+        AnalysisResults {
+            nominal_dimension,
+            predicted_tolerance,
+            cp: 1.33,
+            cpk: 1.2,
+            sigma_level: 4.0,
+            yield_percentage: 99.9937,
+            distribution_data: None,
+        }
+    }
+    
+    fn monte_carlo_analysis_with_contributions(&self, features: &[&Feature], contributions: &[FeatureContribution]) -> Result<AnalysisResults> {
+        let mut rng = rand::thread_rng();
+        let mut samples = Vec::with_capacity(self.config.simulations);
+        
+        for _ in 0..self.config.simulations {
+            let mut total_dimension = 0.0;
+            
+            for (feature, contribution) in features.iter().zip(contributions.iter()) {
+                let multiplier = if contribution.half_count { 0.5 } else { 1.0 };
+                let direction_multiplier = contribution.direction * multiplier;
+                
+                let sample = self.sample_feature_distribution(feature, &mut rng)?;
+                total_dimension += sample * direction_multiplier;
+            }
+            
+            samples.push(total_dimension);
+        }
+        
+        samples.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        
+        let nominal_dimension = samples.iter().sum::<f64>() / samples.len() as f64;
+        let std_dev = self.calculate_std_dev(&samples, nominal_dimension);
+        
+        let alpha = (1.0 - self.config.confidence_level) / 2.0;
+        let lower_idx = (alpha * samples.len() as f64) as usize;
+        let upper_idx = ((1.0 - alpha) * samples.len() as f64) as usize;
+        
+        let predicted_tolerance = Tolerance {
+            plus: samples[upper_idx] - nominal_dimension,
+            minus: nominal_dimension - samples[lower_idx],
+            distribution: ToleranceDistribution::Normal,
+        };
+        
+        let usl = nominal_dimension + predicted_tolerance.plus;
+        let lsl = nominal_dimension - predicted_tolerance.minus;
+        let cp = (usl - lsl) / (6.0 * std_dev);
+        let cpk = ((usl - nominal_dimension) / (3.0 * std_dev)).min((nominal_dimension - lsl) / (3.0 * std_dev));
+        let sigma_level = cpk * 3.0;
+        let yield_percentage = self.calculate_yield(&samples, lsl, usl);
+        
+        Ok(AnalysisResults {
+            nominal_dimension,
+            predicted_tolerance,
+            cp,
+            cpk,
+            sigma_level,
+            yield_percentage,
+            distribution_data: Some(samples),
+        })
     }
     
     fn calculate_std_dev(&self, samples: &[f64], mean: f64) -> f64 {
@@ -219,8 +379,8 @@ mod tests {
     fn test_worst_case_analysis() {
         let analyzer = ToleranceAnalyzer::default();
         let features = vec![
-            Feature::new("Length1".to_string(), "First length".to_string(), Id::new(), FeatureType::Length, 10.0),
-            Feature::new("Length2".to_string(), "Second length".to_string(), Id::new(), FeatureType::Length, 20.0),
+            Feature::new("Length1".to_string(), "First length".to_string(), Id::new(), FeatureType::Length, FeatureCategory::External, 10.0),
+            Feature::new("Length2".to_string(), "Second length".to_string(), Id::new(), FeatureType::Length, FeatureCategory::External, 20.0),
         ];
         let feature_refs: Vec<&Feature> = features.iter().collect();
         
