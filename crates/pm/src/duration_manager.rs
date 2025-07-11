@@ -64,7 +64,7 @@ impl DurationManager {
         }
 
         let assigned_resources: Vec<&Resource> = resources.iter()
-            .filter(|r| task.assigned_resources.contains(&r.id))
+            .filter(|r| task.assigned_resources.iter().any(|assignment| assignment.resource_id == r.id))
             .collect();
 
         if assigned_resources.is_empty() {
@@ -117,7 +117,7 @@ impl DurationManager {
         calendar: &Calendar,
     ) -> Result<DurationCalculation> {
         let assigned_resources: Vec<&Resource> = resources.iter()
-            .filter(|r| task.assigned_resources.contains(&r.id))
+            .filter(|r| task.assigned_resources.iter().any(|assignment| assignment.resource_id == r.id))
             .collect();
 
         let total_daily_hours: f64 = assigned_resources.iter()
@@ -446,7 +446,7 @@ impl DurationManager {
 
         // Find tasks that depend on this task
         let dependent_tasks: Vec<_> = project.tasks.values()
-            .filter(|t| t.dependencies.contains(&task_id))
+            .filter(|t| t.dependencies.iter().any(|dep| dep.predecessor_id == task_id))
             .collect();
 
         // Calculate potential delays

@@ -1,0 +1,33 @@
+[
+    (
+        id: ("fefbdd3c-f3e2-4f11-a423-9f83635615cc"),
+        name: "start",
+        description: "project kickoff",
+        status: InProgress,
+        priority: Medium,
+        work_type: Design,
+        task_type: FixedDuration,
+        estimated_hours: 8.0,
+        actual_hours: 0.0,
+        duration_days: Some(5.0),
+        work_units: None,
+        start_date: Some("2025-07-11T09:00:00Z"),
+        due_date: None,
+        completion_date: None,
+        dependencies: [],
+        assigned_resources: [
+            (
+                resource_id: ("2bcc90a6-c946-46b4-937a-6e2eff3de5a9"),
+                allocation_percentage: 100.0,
+                assigned_hours: None,
+                rate_override: None,
+                role_in_task: None,
+            ),
+        ],
+        progress_percentage: 0.0,
+        notes: None,
+        created: "2025-07-11T20:29:53.545282552Z",
+        updated: "2025-07-11T20:48:56.287759681Z",
+        metadata: {},
+    ),
+]

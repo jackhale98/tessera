@@ -1,0 +1,23 @@
+[
+    (
+        generated: "2025-07-11T20:49:00.846913994Z",
+        project_start: "2025-07-11T20:49:00.846738993Z",
+        project_end: "2025-07-17T20:49:00.846738993Z",
+        critical_path: [
+            ("fefbdd3c-f3e2-4f11-a423-9f83635615cc"),
+        ],
+        total_duration_days: 6,
+        task_schedule: {
+            ("fefbdd3c-f3e2-4f11-a423-9f83635615cc"): (
+                task_id: ("fefbdd3c-f3e2-4f11-a423-9f83635615cc"),
+                earliest_start: "2025-07-11T20:49:00.846738993Z",
+                latest_start: "2025-07-11T20:49:00.846738993Z",
+                earliest_finish: "2025-07-17T20:49:00.846738993Z",
+                latest_finish: "2025-07-17T20:49:00.846738993Z",
+                slack_days: 0,
+                free_float_days: 0,
+                is_critical: true,
+            ),
+        },
+    ),
+]

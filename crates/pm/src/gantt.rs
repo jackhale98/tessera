@@ -410,9 +410,9 @@ impl GanttGenerator {
                     end_date: end.date_naive(),
                     effort_hours: task.estimated_hours as f32,
                     assigned_to: task.assigned_resources.iter()
-                        .filter_map(|resource_id| {
+                        .filter_map(|assignment| {
                             resources.iter()
-                                .find(|r| r.id == *resource_id)
+                                .find(|r| r.id == assignment.resource_id)
                                 .map(|r| r.name.clone())
                         })
                         .collect(),

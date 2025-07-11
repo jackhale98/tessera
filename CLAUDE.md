@@ -7,10 +7,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Tessera is a comprehensive CLI-based engineering toolkit implemented as a Rust workspace with modular architecture:
 
 1. **tessera-core** - Shared foundation with ID system, error handling, project management, and Git integration
-2. **tessera-quality** - Quality management with requirements, design controls, risk analysis, auto-scoring, and traceability matrix
-3. **tessera-pm** - Project management with tasks, resources, scheduling, risk management, issue tracking, baseline management, calendar system, and Gantt chart generation
-4. **tessera-tol** - Tolerance analysis with component modeling, stackups, Monte Carlo simulation, sensitivity analysis, and process capability analysis
-5. **tessera** - Main CLI application that orchestrates all modules
+2. **tessera-requirements** - Requirements and design artifact management with many-to-many linking support
+3. **tessera-risk** - Risk management with design controls, FMEA-style assessment, and industry-standard categorization
+4. **tessera-verification** - Verification and testing activities linked to design inputs
+5. **tessera-quality** - Legacy quality management module (being phased out in favor of modular approach)
+6. **tessera-pm** - Project management with tasks, resources, scheduling, risk management, issue tracking, baseline management, calendar system, and Gantt chart generation
+7. **tessera-tol** - Tolerance analysis with component modeling, stackups, Monte Carlo simulation, sensitivity analysis, and process capability analysis
+8. **tessera** - Main CLI application that orchestrates all modules
 
 All data is stored as human-readable RON files in a Git workspace for versioned collaboration.
 
@@ -48,28 +51,41 @@ cargo run -- init "My Project" --description "Project description"
 # Interactive mode (default)
 cargo run -- interactive
 
-# Quality management commands
-cargo run -- quality req:add
-cargo run -- quality req:list
-cargo run -- quality req:edit
-cargo run -- quality input:add
-cargo run -- quality input:list
-cargo run -- quality input:edit
-cargo run -- quality output:add
-cargo run -- quality output:list
-cargo run -- quality output:edit
-cargo run -- quality verification:add
-cargo run -- quality verification:list
-cargo run -- quality verification:edit
-cargo run -- quality control:add
-cargo run -- quality control:list
-cargo run -- quality control:edit
-cargo run -- quality risk:add
-cargo run -- quality risk:list
-cargo run -- quality risk:edit
-cargo run -- quality risk:assess
-cargo run -- quality risk:score
-cargo run -- quality trace:matrix
+# Requirements management commands (new modular approach)
+cargo run -- requirements req:add
+cargo run -- requirements req:list
+cargo run -- requirements req:edit
+cargo run -- requirements input:add
+cargo run -- requirements input:list
+cargo run -- requirements input:edit
+cargo run -- requirements output:add
+cargo run -- requirements output:list
+cargo run -- requirements output:edit
+cargo run -- requirements verification:add
+cargo run -- requirements verification:list
+cargo run -- requirements verification:edit
+cargo run -- requirements dashboard
+cargo run -- requirements trace:matrix
+
+# Risk management commands (new modular approach)
+cargo run -- risk risk:add
+cargo run -- risk risk:list
+cargo run -- risk risk:edit
+cargo run -- risk risk:assess
+cargo run -- risk risk:score
+cargo run -- risk control:add
+cargo run -- risk control:list
+cargo run -- risk control:edit
+cargo run -- risk dashboard
+
+# Verification management commands (new modular approach)
+cargo run -- verification test:add
+cargo run -- verification test:list
+cargo run -- verification test:run
+cargo run -- verification report:generate
+cargo run -- verification dashboard
+
+# Legacy quality management commands (deprecated - use modular commands above)
 cargo run -- quality dashboard
 
 # Project management commands
@@ -92,7 +108,9 @@ cargo run -- status
 cargo run -- validate
 
 # Module-specific interactive mode
-cargo run -- interactive --module quality
+cargo run -- interactive --module requirements
+cargo run -- interactive --module risk
+cargo run -- interactive --module verification
 cargo run -- interactive --module pm
 cargo run -- interactive --module tol
 
@@ -113,16 +131,28 @@ cargo run -- link validate
 - **Git Integration**: Repository operations, commit history, and collaboration features
 - **Traits**: Entity, Repository, Linkable, and LinkResolver for extensible module architecture
 
-### Quality Management (tessera-quality)
-- **Requirements Management**: Categorized requirements with priorities and acceptance criteria
-- **Design Inputs/Outputs**: Traceable design artifacts with automatic requirement linking
-- **Verification Management**: Dedicated verification entities that validate design outputs
-- **Design Controls**: Review, inspection, test, and validation processes
-- **Risk Management**: FMEA-style risk assessment with probability/impact scoring and configurable ranges
-- **Risk Scoring**: Simple auto-scoring (probability × impact) with real-time calculation
-- **Risk Categorization**: Low/Medium/High/Critical risk levels with configurable thresholds
-- **Traceability Matrix**: Comprehensive link management with gap analysis and coverage reporting
-- **Interactive Editing**: Full CRUD operations for all quality entities with guided workflows
+### Requirements Management (tessera-requirements)
+- **Requirements**: Categorized requirements with priorities and stakeholder information
+- **Design Inputs**: Traceable design artifacts derived from requirements
+- **Design Outputs**: Deliverables that satisfy design inputs (many-to-many relationship)
+- **Verifications**: Activities that validate design inputs (many-to-many relationship)
+- **Many-to-Many Linking**: Design outputs can link to multiple inputs, verifications can link to multiple inputs
+- **Interactive Workflows**: Guided multi-selection for creating and editing linked entities
+- **Traceability Matrix**: Full requirements traceability with gap analysis
+
+### Risk Management (tessera-risk)
+- **Risk Registry**: Industry-standard risk categorization (Design, Process, Use, Software)
+- **Design Controls**: Preventive, Detective, Corrective, Compensating, and Directive controls
+- **Risk Assessment**: Probability/impact scoring with configurable matrices
+- **Risk Analysis**: Monte Carlo simulation and statistical analysis
+- **Auto-Scoring**: Real-time risk score calculation and categorization
+
+### Verification Management (tessera-verification)
+- **Test Execution**: Automated and manual test execution frameworks
+- **Verification Planning**: Test method selection and acceptance criteria definition
+- **Evidence Management**: Documentation and artifact linking
+- **Reporting**: Comprehensive verification status and coverage reports
+- **Integration**: Cross-module integration with requirements and risk modules
 
 ### Project Management (tessera-pm)
 - **Task Management**: Task hierarchy with dependencies, effort tracking, and progress monitoring
@@ -142,10 +172,8 @@ cargo run -- link validate
 - **Distribution Engine**: Support for Normal, Uniform, Triangular, and LogNormal distributions
 
 ### CLI Application (tessera)
-- **Command Structure**: Hierarchical commands with module-specific subcommands
-- **Interactive Mode**: inquire-based prompts with fuzzy search and rich formatting
-- **Menu Organization**: Hierarchical menu structure with category-based navigation (📋 Manage Entities, 📊 Analysis Tools, ⚙️ Settings, 📈 Dashboard)
-- **Entity Management**: Full CRUD operations with guided workflows and automatic linking
+- **Modular Commands**: Separate command structures for each module (requirements, risk, verification)
+- **Interactive Mode**: inquire-based prompts with multi-selection support and rich formatting
 - **Async Architecture**: Tokio-based async runtime for future extensibility
 - **Rich Output**: Colored terminal output with tables and progress indicators
 
@@ -154,13 +182,25 @@ cargo run -- link validate
 ### Project Structure
 ```
 project.ron          # Project metadata and configuration
-quality/
+requirements/
   requirements.ron   # Design requirements
-  inputs.ron         # Design inputs
-  outputs.ron        # Design outputs
+  design_inputs.ron  # Design inputs
+  design_outputs.ron # Design outputs
   verifications.ron  # Verification activities
-  controls.ron       # Design controls
+risk/
   risks.ron          # Risk registry
+  controls.ron       # Design controls
+verification/
+  tests.ron          # Test definitions
+  results.ron        # Test execution results
+  reports.ron        # Verification reports
+quality/             # Legacy quality data (deprecated)
+  requirements.ron   
+  inputs.ron
+  outputs.ron
+  verifications.ron
+  controls.ron
+  risks.ron
 pm/
   tasks.ron          # Project tasks
   resources.ron      # Resource definitions
@@ -179,32 +219,23 @@ tol/
 
 ### Key Design Patterns
 - **ID-Based Linking**: Cross-module references using UUID-based IDs
+- **Many-to-Many Relationships**: Design outputs link to multiple inputs, verifications link to multiple inputs
 - **RON Serialization**: Human-readable, Git-friendly data format
 - **Trait-Based Architecture**: Entity and Repository traits for consistent CRUD operations
 - **Validation**: Built-in validation for all data structures
 - **Error Propagation**: Comprehensive error handling with context preservation
 
-### Quality Module Workflow and Linking
-The quality module implements a structured workflow with automatic linking between entities:
-
-#### Entity Relationships
+### Entity Relationships (New Modular Approach)
 - **Requirements → Design Inputs**: Each design input implements exactly one requirement
-- **Design Inputs → Design Outputs**: Each design output satisfies exactly one design input
-- **Design Outputs → Verifications**: Each verification validates exactly one design output
-- **Design Outputs → Design Controls**: Design controls can be linked to multiple design outputs
+- **Design Inputs ↔ Design Outputs**: Many-to-many relationship (outputs can satisfy multiple inputs)
+- **Design Inputs ↔ Verifications**: Many-to-many relationship (verifications can validate multiple inputs)
+- **Design Controls**: Can be linked to multiple entities across modules
 
-#### Interactive Workflow
-- **Guided Creation**: When creating design outputs, users must first select the design input being satisfied
-- **Automatic Linking**: Links are established automatically during entity creation
-- **Validation**: The system ensures required entities exist before allowing dependent entities to be created
-- **Edit Capabilities**: Full editing support for requirements and risks, with additional entities coming soon
-
-#### Menu Organization
-The quality interactive mode is organized into logical categories:
-- **📋 Manage Entities**: CRUD operations for all quality entities
-- **📊 Analysis Tools**: Risk assessment, scoring, and traceability matrix
-- **⚙️ Settings**: Risk scoring configuration and tolerance thresholds
-- **📈 Dashboard**: Quality overview and status
+### Interactive Workflow Enhancements
+- **Multi-Selection Support**: Users can select multiple entities when creating links
+- **Guided Creation**: Step-by-step workflows with validation at each step
+- **Field-by-Field Editing**: Comprehensive editing menus for all entity properties
+- **Automatic Validation**: Real-time validation during entity creation and modification
 
 ### Module Integration
 - **Core Traits**: Shared interfaces for entities, repositories, and linking
@@ -248,36 +279,13 @@ The quality interactive mode is organized into logical categories:
 - Use IndexMap for ordered collections that preserve definition order
 - Include created/updated timestamps for audit trails
 - Support metadata fields for extensibility
+- Consider many-to-many relationships when designing entity links
 
 ### CLI Integration
 - Add module-specific subcommands to main CLI
-- Implement interactive mode handlers
+- Implement interactive mode handlers with multi-selection support
 - Use consistent error handling and user feedback
 - Support both command-line and interactive usage patterns
-
-## Quality Module Implementation Status
-
-### Completed Features
-- **Requirements Management**: Full CRUD operations with interactive editing
-- **Design Inputs/Outputs**: Creation with automatic requirement/input linking
-- **Verification Management**: Creation with automatic output linking
-- **Risk Management**: Full CRUD operations with scoring and assessment
-- **Menu Organization**: Hierarchical menu structure with category-based navigation
-- **Guided Workflows**: Step-by-step creation with validation and link establishment
-- **Migration System**: Automatic data migration for schema updates
-
-### Current Limitations
-- **Editing Support**: Currently available for requirements and risks only
-- **Design Input Editing**: Coming soon (placeholder implemented)
-- **Design Output Editing**: Coming soon (placeholder implemented)
-- **Verification Editing**: Coming soon (placeholder implemented)
-- **Design Control Editing**: Coming soon (placeholder implemented)
-
-### Recent Improvements
-- **Simplified Linking**: Removed complex manual linking in favor of automatic linking during creation
-- **Better UX**: Users select the parent entity first, then create the child entity
-- **Validation**: System prevents creating child entities without required parent entities
-- **Menu Structure**: Organized into logical categories for better navigation
 
 ## Common Issues and Solutions
 
@@ -286,6 +294,7 @@ The quality interactive mode is organized into logical categories:
 - **Type mismatches**: Watch for f32/f64 conflicts - use consistent types throughout calculations
 - **Import errors**: Use tessera_core::Id instead of crate::Id in module files
 - **DateTime conversions**: Use .date_naive() when converting DateTime<Utc> to NaiveDate
+- **Many-to-many relationship errors**: Ensure Vec<Id> is used for multiple entity links, not single Id
 
 ### Running the Application
 To test the application after fixes:
@@ -298,12 +307,18 @@ cargo run -- init "Test Project"  # Initialize test project
 ### Key Testing Commands
 ```bash
 # Check specific crate
+cargo check -p tessera-requirements
+cargo check -p tessera-risk
+cargo check -p tessera-verification
 cargo check -p tessera-quality
 cargo check -p tessera-pm  
 cargo check -p tessera-tol
 
 # Run tests for specific crate
 cargo test -p tessera-core
+cargo test -p tessera-requirements
+cargo test -p tessera-risk
+cargo test -p tessera-verification
 cargo test -p tessera-quality
 cargo test -p tessera-pm
 cargo test -p tessera-tol
@@ -311,3 +326,25 @@ cargo test -p tessera-tol
 # Run tests for CLI application
 cargo test -p tessera
 ```
+
+## Migration from Legacy Quality Module
+
+The codebase is transitioning from a monolithic quality module to separate modular crates:
+
+### Legacy vs New Approach
+- **Legacy**: Single `tessera-quality` crate with all quality entities
+- **New**: Separate `tessera-requirements`, `tessera-risk`, and `tessera-verification` crates
+
+### Data Model Changes
+- **One-to-Many → Many-to-Many**: Design outputs and verifications now support multiple linked entities
+- **Verification Target Change**: Verifications now link to design inputs instead of design outputs
+- **Enhanced Field Support**: Added support for metadata, tags, and extended entity properties
+
+### Command Structure Changes
+- **Old**: `cargo run -- quality req:add`
+- **New**: `cargo run -- requirements req:add`
+
+### Interactive Mode Enhancements
+- **Multi-Selection**: Support for selecting multiple entities during creation/editing
+- **Field-by-Field Editing**: Comprehensive editing menus for all entity properties
+- **Improved Workflows**: Better user experience with guided entity creation and linking

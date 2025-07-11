@@ -393,8 +393,8 @@ impl BaselineProjectSnapshot {
                     duration_days: (end.date_naive() - start.date_naive()).num_days() as i32 + 1,
                     effort_hours: task.estimated_hours as f32,
                     cost: (task.estimated_hours * 100.0) as f32, // Assume $100/hour default
-                    assigned_resources: task.assigned_resources.iter().map(|id| id.to_string()).collect(),
-                    dependencies: task.dependencies.clone(),
+                    assigned_resources: task.assigned_resources.iter().map(|assignment| assignment.resource_id.to_string()).collect(),
+                    dependencies: task.dependencies.iter().map(|dep| dep.predecessor_id).collect(),
                     work_breakdown_structure: None,
                 };
                 

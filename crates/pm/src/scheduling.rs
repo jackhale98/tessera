@@ -56,6 +56,9 @@ impl ProjectScheduler {
         
         self.calculate_late_times(&mut task_schedules, &sorted_tasks, tasks, project_end)?;
         
+        // Calculate free float for all tasks
+        self.calculate_free_floats(&mut task_schedules, tasks)?;
+        
         // Identify critical path
         let critical_path = self.find_critical_path(&task_schedules);
         
@@ -84,8 +87,8 @@ impl ProjectScheduler {
         // Add dependency edges
         for task in tasks {
             let task_node = task_nodes[&task.id];
-            for &dep_id in &task.dependencies {
-                if let Some(&dep_node) = task_nodes.get(&dep_id) {
+            for dep in &task.dependencies {
+                if let Some(&dep_node) = task_nodes.get(&dep.predecessor_id) {
                     // Edge from dependency to task (dependency must finish before task starts)
                     graph.add_edge(dep_node, task_node, ());
                 }
@@ -159,12 +162,40 @@ impl ProjectScheduler {
             let earliest_start = if task.dependencies.is_empty() {
                 project_start
             } else {
-                task.dependencies
-                    .iter()
-                    .filter_map(|&dep_id| task_schedules.get(&dep_id))
-                    .map(|ts| ts.earliest_finish)
-                    .max()
-                    .unwrap_or(project_start)
+                let mut max_constraint_date = project_start;
+                
+                for dep in &task.dependencies {
+                    if let Some(pred_schedule) = task_schedules.get(&dep.predecessor_id) {
+                        let constraint_date = match dep.dependency_type {
+                            DependencyType::FinishToStart => {
+                                // Successor starts after predecessor finishes + lag
+                                pred_schedule.earliest_finish + Duration::days(dep.lag_days.ceil() as i64)
+                            },
+                            DependencyType::StartToStart => {
+                                // Successor starts after predecessor starts + lag  
+                                pred_schedule.earliest_start + Duration::days(dep.lag_days.ceil() as i64)
+                            },
+                            DependencyType::FinishToFinish => {
+                                // Successor must finish after predecessor finishes + lag
+                                // So earliest start = pred finish + lag - task duration
+                                let task_duration = self.calculate_task_duration(task);
+                                pred_schedule.earliest_finish + Duration::days(dep.lag_days.ceil() as i64) - task_duration
+                            },
+                            DependencyType::StartToFinish => {
+                                // Successor must finish after predecessor starts + lag
+                                // So earliest start = pred start + lag - task duration  
+                                let task_duration = self.calculate_task_duration(task);
+                                pred_schedule.earliest_start + Duration::days(dep.lag_days.ceil() as i64) - task_duration
+                            },
+                        };
+                        
+                        if constraint_date > max_constraint_date {
+                            max_constraint_date = constraint_date;
+                        }
+                    }
+                }
+                
+                max_constraint_date
             };
             
             let duration = self.calculate_task_duration(task);
@@ -191,23 +222,53 @@ impl ProjectScheduler {
             // Find tasks that depend on this one
             let dependents: Vec<_> = tasks
                 .iter()
-                .filter(|t| t.dependencies.contains(&task_id))
+                .filter(|t| t.dependencies.iter().any(|dep| dep.predecessor_id == task_id))
                 .collect();
             
             let latest_finish = if dependents.is_empty() {
                 // No dependents, can finish at project end
                 project_end
             } else {
-                // Find the minimum latest start time of dependent tasks
-                let mut min_latest_start = project_end;
+                // Find the minimum constraint from all dependent tasks
+                let mut min_constraint_date = project_end;
+                
                 for dependent in dependents {
                     if let Some(dep_schedule) = task_schedules.get(&dependent.id) {
-                        if dep_schedule.latest_start < min_latest_start {
-                            min_latest_start = dep_schedule.latest_start;
+                        // Find the dependency relationship for this dependent task
+                        if let Some(dependency) = dependent.dependencies.iter()
+                            .find(|dep| dep.predecessor_id == task_id) {
+                            
+                            let constraint_date = match dependency.dependency_type {
+                                DependencyType::FinishToStart => {
+                                    // This task must finish before dependent starts - lag
+                                    dep_schedule.latest_start - Duration::days(dependency.lag_days.ceil() as i64)
+                                },
+                                DependencyType::StartToStart => {
+                                    // This task must start before dependent starts - lag
+                                    // So latest finish = latest start + task duration
+                                    let constraint_start = dep_schedule.latest_start - Duration::days(dependency.lag_days.ceil() as i64);
+                                    constraint_start + self.calculate_task_duration(task)
+                                },
+                                DependencyType::FinishToFinish => {
+                                    // This task must finish before dependent finishes - lag
+                                    dep_schedule.latest_finish - Duration::days(dependency.lag_days.ceil() as i64)
+                                },
+                                DependencyType::StartToFinish => {
+                                    // This task must start before dependent finishes - lag
+                                    // So latest finish = latest start + task duration
+                                    let constraint_start = dep_schedule.latest_finish - Duration::days(dependency.lag_days.ceil() as i64);
+                                    constraint_start + self.calculate_task_duration(task)
+                                },
+                            };
+                            
+                            if constraint_date < min_constraint_date {
+                                min_constraint_date = constraint_date;
+                            }
                         }
                     }
                 }
-                min_latest_start
+                
+                min_constraint_date
             };
             
             let duration = self.calculate_task_duration(task);
@@ -216,8 +277,37 @@ impl ProjectScheduler {
             if let Some(schedule_info) = task_schedules.get_mut(&task_id) {
                 schedule_info.latest_finish = latest_finish;
                 schedule_info.latest_start = latest_finish - duration;
-                schedule_info.slack_days = (schedule_info.latest_start - schedule_info.earliest_start).num_days();
-                schedule_info.is_critical = schedule_info.slack_days == 0;
+                
+                // Calculate total float (slack)
+                let total_float = (schedule_info.latest_start - schedule_info.earliest_start).num_days();
+                schedule_info.slack_days = total_float;
+                
+                // A task is critical if it has zero total float
+                schedule_info.is_critical = total_float <= 0;
+            }
+        }
+        
+        Ok(())
+    }
+    
+    fn calculate_free_floats(
+        &self,
+        task_schedules: &mut indexmap::IndexMap<Id, TaskScheduleInfo>,
+        tasks: &[Task],
+    ) -> Result<()> {
+        // Calculate all free floats first, then update the schedule infos
+        let task_ids: Vec<Id> = task_schedules.keys().cloned().collect();
+        let mut free_floats = HashMap::new();
+        
+        for task_id in task_ids {
+            let free_float = self.calculate_free_float(task_id, task_schedules, tasks);
+            free_floats.insert(task_id, free_float);
+        }
+        
+        // Update the schedule infos with calculated free floats
+        for (task_id, free_float) in free_floats {
+            if let Some(schedule_info) = task_schedules.get_mut(&task_id) {
+                schedule_info.free_float_days = free_float;
             }
         }
         
@@ -225,17 +315,109 @@ impl ProjectScheduler {
     }
     
     fn calculate_task_duration(&self, task: &Task) -> Duration {
-        let base_hours = task.estimated_hours * (1.0 + self.config.buffer_percentage);
-        let days = (base_hours / self.config.working_hours_per_day).ceil() as i64;
-        Duration::days(days)
+        let duration_days = match task.task_type {
+            TaskType::EffortDriven => {
+                // Duration = Effort / (Total Resource Allocation * Hours per Day)
+                if !task.assigned_resources.is_empty() {
+                    let total_allocation: f64 = task.assigned_resources.iter()
+                        .map(|res| res.allocation_percentage / 100.0)
+                        .sum();
+                    if total_allocation > 0.0 {
+                        task.estimated_hours / (total_allocation * self.config.working_hours_per_day)
+                    } else {
+                        task.estimated_hours / self.config.working_hours_per_day
+                    }
+                } else {
+                    task.estimated_hours / self.config.working_hours_per_day
+                }
+            },
+            TaskType::FixedDuration => {
+                // Duration is fixed
+                task.duration_days.unwrap_or(1.0)
+            },
+            TaskType::FixedWork => {
+                // Duration = Work Units / (Total Resource Allocation * Hours per Day)
+                let work_units = task.work_units.unwrap_or(task.estimated_hours);
+                if !task.assigned_resources.is_empty() {
+                    let total_allocation: f64 = task.assigned_resources.iter()
+                        .map(|res| res.allocation_percentage / 100.0)
+                        .sum();
+                    if total_allocation > 0.0 {
+                        work_units / (total_allocation * self.config.working_hours_per_day)
+                    } else {
+                        work_units / self.config.working_hours_per_day
+                    }
+                } else {
+                    work_units / self.config.working_hours_per_day
+                }
+            },
+            TaskType::Milestone => {
+                // Milestones have zero duration
+                0.0
+            }
+        };
+        
+        // Apply buffer percentage and convert to Duration
+        let final_days = (duration_days * (1.0 + self.config.buffer_percentage)).ceil() as i64;
+        Duration::days(final_days.max(0)) // Ensure non-negative duration
     }
     
     fn find_critical_path(&self, task_schedules: &indexmap::IndexMap<Id, TaskScheduleInfo>) -> Vec<Id> {
-        task_schedules
+        // Find all critical tasks (tasks with zero or negative float)
+        let critical_tasks: Vec<Id> = task_schedules
             .values()
             .filter(|ts| ts.is_critical)
             .map(|ts| ts.task_id)
-            .collect()
+            .collect();
+        
+        // For now, return all critical tasks
+        // TODO: Implement path-finding algorithm to find the actual longest path
+        // through the critical tasks from project start to end
+        critical_tasks
+    }
+    
+    /// Calculate free float for a task (time a task can be delayed without affecting any successor)
+    pub fn calculate_free_float(&self, task_id: Id, task_schedules: &indexmap::IndexMap<Id, TaskScheduleInfo>, tasks: &[Task]) -> i64 {
+        let task_schedule = match task_schedules.get(&task_id) {
+            Some(ts) => ts,
+            None => return 0,
+        };
+        
+        // Find the earliest start of immediate successors
+        let mut min_successor_start = task_schedule.latest_finish;
+        
+        for task in tasks {
+            for dep in &task.dependencies {
+                if dep.predecessor_id == task_id {
+                    if let Some(successor_schedule) = task_schedules.get(&task.id) {
+                        let successor_constraint = match dep.dependency_type {
+                            DependencyType::FinishToStart => {
+                                successor_schedule.earliest_start - Duration::days(dep.lag_days.ceil() as i64)
+                            },
+                            DependencyType::StartToStart => {
+                                // Successor starts relative to predecessor start
+                                successor_schedule.earliest_start - Duration::days(dep.lag_days.ceil() as i64) - 
+                                    (task_schedule.earliest_finish - task_schedule.earliest_start)
+                            },
+                            DependencyType::FinishToFinish => {
+                                successor_schedule.earliest_finish - Duration::days(dep.lag_days.ceil() as i64)
+                            },
+                            DependencyType::StartToFinish => {
+                                successor_schedule.earliest_finish - Duration::days(dep.lag_days.ceil() as i64) -
+                                    (task_schedule.earliest_finish - task_schedule.earliest_start)
+                            },
+                        };
+                        
+                        if successor_constraint < min_successor_start {
+                            min_successor_start = successor_constraint;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Free float = min successor constraint - earliest finish of this task
+        (min_successor_start - task_schedule.earliest_finish).num_days()
     }
 }
 

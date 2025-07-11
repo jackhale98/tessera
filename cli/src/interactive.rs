@@ -347,13 +347,20 @@ async fn run_pm_manage_menu(project_ctx: ProjectContext) -> Result<()> {
                 run_pm_entity_actions_menu("Tasks", &[
                     ("Add Task", PmCommands::AddTask),
                     ("List Tasks", PmCommands::ListTasks),
+                    ("Edit Task", PmCommands::EditTask),
                 ], project_ctx.clone()).await
             },
             "👥 Resources" => {
-                execute_pm_command(PmCommands::AddResource, project_ctx.clone()).await
+                run_pm_entity_actions_menu("Resources", &[
+                    ("Add Resource", PmCommands::AddResource),
+                    ("Edit Resource", PmCommands::EditResource),
+                ], project_ctx.clone()).await
             },
             "🏁 Milestones" => {
-                execute_pm_command(PmCommands::AddMilestone, project_ctx.clone()).await
+                run_pm_entity_actions_menu("Milestones", &[
+                    ("Add Milestone", PmCommands::AddMilestone),
+                    ("Edit Milestone", PmCommands::EditMilestone),
+                ], project_ctx.clone()).await
             },
             "← Back" => {
                 break;

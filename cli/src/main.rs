@@ -243,13 +243,25 @@ enum PmCommands {
     #[command(name = "task:list")]
     ListTasks,
     
+    /// Edit a task
+    #[command(name = "task:edit")]
+    EditTask,
+    
     /// Add a resource
     #[command(name = "resource:add")]
     AddResource,
     
+    /// Edit a resource
+    #[command(name = "resource:edit")]
+    EditResource,
+    
     /// Add a milestone
     #[command(name = "milestone:add")]
     AddMilestone,
+    
+    /// Edit a milestone
+    #[command(name = "milestone:edit")]
+    EditMilestone,
     
     /// Compute project schedule
     Schedule,

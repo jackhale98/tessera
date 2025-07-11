@@ -11,14 +11,18 @@ pub struct Task {
     pub status: TaskStatus,
     pub priority: TaskPriority,
     pub work_type: WorkType,
+    pub task_type: TaskType,
     pub estimated_hours: f64,
     pub actual_hours: f64,
+    pub duration_days: Option<f64>, // Duration in working days
+    pub work_units: Option<f64>, // Total work units (for fixed work tasks)
     pub start_date: Option<DateTime<Utc>>,
     pub due_date: Option<DateTime<Utc>>,
     pub completion_date: Option<DateTime<Utc>>,
-    pub dependencies: Vec<Id>, // Other task IDs
-    pub assigned_resources: Vec<Id>, // Resource IDs
+    pub dependencies: Vec<TaskDependency>, // Enhanced dependencies with relationship types
+    pub assigned_resources: Vec<ResourceAssignment>, // Enhanced resource assignments
     pub progress_percentage: f64, // 0.0 to 100.0
+    pub notes: Option<String>,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
     pub metadata: IndexMap<String, String>,
@@ -50,6 +54,51 @@ pub enum WorkType {
     Review,
     Manufacturing,
     Other(String),
+}
+
+/// Defines how a task's duration, effort, and resources interact
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub enum TaskType {
+    /// Effort is fixed, duration changes with resource allocation
+    EffortDriven,
+    /// Duration is fixed, effort changes with resource allocation  
+    FixedDuration,
+    /// Work units are fixed, both effort and duration can change
+    FixedWork,
+    /// Zero-duration milestone
+    Milestone,
+}
+
+/// Enhanced dependency with relationship types and lag/lead time
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TaskDependency {
+    pub predecessor_id: Id,
+    pub dependency_type: DependencyType,
+    pub lag_days: f32, // Positive for lag, negative for lead
+    pub description: Option<String>,
+}
+
+/// Types of dependency relationships between tasks
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub enum DependencyType {
+    /// Predecessor must finish before successor starts (most common)
+    FinishToStart,
+    /// Predecessor must start before successor starts
+    StartToStart,
+    /// Predecessor must finish before successor finishes
+    FinishToFinish,
+    /// Predecessor must start before successor finishes
+    StartToFinish,
+}
+
+/// Enhanced resource assignment with allocation details
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ResourceAssignment {
+    pub resource_id: Id,
+    pub allocation_percentage: f64, // 0.0 to 100.0 - percentage of resource's time
+    pub assigned_hours: Option<f64>, // Specific hours assigned (if different from calculated)
+    pub rate_override: Option<f64>, // Override hourly rate for this assignment
+    pub role_in_task: Option<String>, // Role of resource in this specific task
 }
 
 impl Entity for Task {
@@ -91,34 +140,210 @@ impl Task {
             status: TaskStatus::NotStarted,
             priority: TaskPriority::Medium,
             work_type,
-            estimated_hours: 1.0,
+            task_type: TaskType::EffortDriven,
+            estimated_hours: 8.0, // Default to 1 day
             actual_hours: 0.0,
+            duration_days: Some(1.0), // Default to 1 day duration
+            work_units: None,
             start_date: None,
             due_date: None,
             completion_date: None,
             dependencies: Vec::new(),
             assigned_resources: Vec::new(),
             progress_percentage: 0.0,
+            notes: None,
             created: now,
             updated: now,
             metadata: IndexMap::new(),
         }
+    }
+
+    /// Create a new task with specific type
+    pub fn with_type(name: String, description: String, work_type: WorkType, task_type: TaskType) -> Self {
+        let mut task = Self::new(name, description, work_type);
+        task.task_type = task_type;
+        
+        // Set defaults based on task type
+        match task_type {
+            TaskType::EffortDriven => {
+                task.estimated_hours = 8.0;
+                task.duration_days = None; // Will be calculated
+            }
+            TaskType::FixedDuration => {
+                task.duration_days = Some(1.0);
+                task.estimated_hours = 8.0; // Will be adjusted based on resources
+            }
+            TaskType::FixedWork => {
+                task.work_units = Some(8.0);
+                task.estimated_hours = 8.0; // Will be calculated
+                task.duration_days = None; // Will be calculated
+            }
+            TaskType::Milestone => {
+                task.estimated_hours = 0.0;
+                task.duration_days = Some(0.0);
+            }
+        }
+        
+        task.updated = Utc::now();
+        task
     }
     
     pub fn is_completed(&self) -> bool {
         matches!(self.status, TaskStatus::Completed)
     }
     
+    pub fn is_milestone(&self) -> bool {
+        matches!(self.task_type, TaskType::Milestone)
+    }
+    
     pub fn is_ready_to_start(&self, completed_tasks: &[Id]) -> bool {
-        self.dependencies.iter().all(|dep_id| completed_tasks.contains(dep_id))
+        self.dependencies.iter().all(|dep| completed_tasks.contains(&dep.predecessor_id))
     }
     
     pub fn duration_days(&self) -> Option<i64> {
         if let (Some(start), Some(end)) = (self.start_date, self.due_date) {
             Some((end - start).num_days())
         } else {
-            None
+            self.duration_days.map(|d| d.ceil() as i64)
         }
+    }
+
+    /// Add a dependency to this task
+    pub fn add_dependency(&mut self, predecessor_id: Id, dependency_type: DependencyType, lag_days: f32) {
+        let dependency = TaskDependency {
+            predecessor_id,
+            dependency_type,
+            lag_days,
+            description: None,
+        };
+        
+        // Remove existing dependency with same predecessor if exists
+        self.dependencies.retain(|dep| dep.predecessor_id != predecessor_id);
+        self.dependencies.push(dependency);
+        self.updated = Utc::now();
+    }
+
+    /// Add a resource assignment to this task
+    pub fn assign_resource(&mut self, resource_id: Id, allocation_percentage: f64) -> Result<()> {
+        if allocation_percentage < 0.0 || allocation_percentage > 100.0 {
+            return Err(tessera_core::DesignTrackError::Validation(
+                "Allocation percentage must be between 0 and 100".to_string()
+            ));
+        }
+
+        let assignment = ResourceAssignment {
+            resource_id,
+            allocation_percentage,
+            assigned_hours: None,
+            rate_override: None,
+            role_in_task: None,
+        };
+
+        // Remove existing assignment for same resource if exists
+        self.assigned_resources.retain(|res| res.resource_id != resource_id);
+        self.assigned_resources.push(assignment);
+        self.updated = Utc::now();
+        
+        Ok(())
+    }
+
+    /// Remove a resource assignment
+    pub fn unassign_resource(&mut self, resource_id: Id) {
+        self.assigned_resources.retain(|res| res.resource_id != resource_id);
+        self.updated = Utc::now();
+    }
+
+    /// Calculate effective effort based on task type and assignments
+    pub fn calculate_effective_effort(&self) -> f64 {
+        match self.task_type {
+            TaskType::EffortDriven => self.estimated_hours,
+            TaskType::FixedDuration => {
+                if let Some(duration) = self.duration_days {
+                    let total_allocation: f64 = self.assigned_resources.iter()
+                        .map(|res| res.allocation_percentage / 100.0)
+                        .sum();
+                    duration * 8.0 * total_allocation // 8 hours per day
+                } else {
+                    self.estimated_hours
+                }
+            }
+            TaskType::FixedWork => self.work_units.unwrap_or(self.estimated_hours),
+            TaskType::Milestone => 0.0,
+        }
+    }
+
+    /// Calculate effective duration based on task type and assignments
+    pub fn calculate_effective_duration(&self) -> Option<f64> {
+        match self.task_type {
+            TaskType::EffortDriven => {
+                if !self.assigned_resources.is_empty() {
+                    let total_allocation: f64 = self.assigned_resources.iter()
+                        .map(|res| res.allocation_percentage / 100.0)
+                        .sum();
+                    if total_allocation > 0.0 {
+                        Some(self.estimated_hours / (8.0 * total_allocation))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+            TaskType::FixedDuration => self.duration_days,
+            TaskType::FixedWork => {
+                if let Some(work_units) = self.work_units {
+                    if !self.assigned_resources.is_empty() {
+                        let total_allocation: f64 = self.assigned_resources.iter()
+                            .map(|res| res.allocation_percentage / 100.0)
+                            .sum();
+                        if total_allocation > 0.0 {
+                            Some(work_units / (8.0 * total_allocation))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+            TaskType::Milestone => Some(0.0),
+        }
+    }
+
+    /// Get list of predecessor task IDs
+    pub fn get_predecessor_ids(&self) -> Vec<Id> {
+        self.dependencies.iter().map(|dep| dep.predecessor_id).collect()
+    }
+
+    /// Update progress and automatically update status if needed
+    pub fn update_progress(&mut self, progress: f64) -> Result<()> {
+        if progress < 0.0 || progress > 100.0 {
+            return Err(tessera_core::DesignTrackError::Validation(
+                "Progress must be between 0 and 100".to_string()
+            ));
+        }
+
+        self.progress_percentage = progress;
+        
+        // Auto-update status based on progress
+        match self.status {
+            TaskStatus::NotStarted if progress > 0.0 => {
+                self.status = TaskStatus::InProgress;
+                if self.start_date.is_none() {
+                    self.start_date = Some(Utc::now());
+                }
+            }
+            TaskStatus::InProgress if progress >= 100.0 => {
+                self.status = TaskStatus::Completed;
+                self.completion_date = Some(Utc::now());
+            }
+            _ => {}
+        }
+        
+        self.updated = Utc::now();
+        Ok(())
     }
 }
 
@@ -260,7 +485,8 @@ pub struct TaskScheduleInfo {
     pub latest_start: DateTime<Utc>,
     pub earliest_finish: DateTime<Utc>,
     pub latest_finish: DateTime<Utc>,
-    pub slack_days: i64,
+    pub slack_days: i64,        // Total float (latest start - earliest start)
+    pub free_float_days: i64,   // Free float (time can delay without affecting successors)
     pub is_critical: bool,
 }
 
@@ -274,6 +500,7 @@ impl TaskScheduleInfo {
             earliest_finish,
             latest_finish: earliest_finish, // Will be updated by scheduling algorithm
             slack_days: 0,
+            free_float_days: 0,
             is_critical: false,
         }
     }
@@ -299,5 +526,39 @@ impl std::fmt::Display for TaskStatus {
             TaskStatus::Completed => write!(f, "Completed"),
             TaskStatus::Cancelled => write!(f, "Cancelled"),
         }
+    }
+}
+
+impl std::fmt::Display for TaskType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TaskType::EffortDriven => write!(f, "Effort Driven"),
+            TaskType::FixedDuration => write!(f, "Fixed Duration"),
+            TaskType::FixedWork => write!(f, "Fixed Work"),
+            TaskType::Milestone => write!(f, "Milestone"),
+        }
+    }
+}
+
+impl std::fmt::Display for DependencyType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DependencyType::FinishToStart => write!(f, "Finish-to-Start"),
+            DependencyType::StartToStart => write!(f, "Start-to-Start"),
+            DependencyType::FinishToFinish => write!(f, "Finish-to-Finish"),
+            DependencyType::StartToFinish => write!(f, "Start-to-Finish"),
+        }
+    }
+}
+
+impl Default for TaskType {
+    fn default() -> Self {
+        TaskType::EffortDriven
+    }
+}
+
+impl Default for DependencyType {
+    fn default() -> Self {
+        DependencyType::FinishToStart
     }
 }
