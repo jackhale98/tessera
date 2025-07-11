@@ -51,18 +51,22 @@ cargo run -- interactive
 # Quality management commands
 cargo run -- quality req:add
 cargo run -- quality req:list
+cargo run -- quality req:edit
 cargo run -- quality input:add
 cargo run -- quality input:list
-cargo run -- quality input:link-req
+cargo run -- quality input:edit
 cargo run -- quality output:add
 cargo run -- quality output:list
-cargo run -- quality output:link-req
-cargo run -- quality output:link-input
+cargo run -- quality output:edit
+cargo run -- quality verification:add
+cargo run -- quality verification:list
+cargo run -- quality verification:edit
 cargo run -- quality control:add
 cargo run -- quality control:list
-cargo run -- quality control:link-output
+cargo run -- quality control:edit
 cargo run -- quality risk:add
 cargo run -- quality risk:list
+cargo run -- quality risk:edit
 cargo run -- quality risk:assess
 cargo run -- quality risk:score
 cargo run -- quality trace:matrix
@@ -111,12 +115,14 @@ cargo run -- link validate
 
 ### Quality Management (tessera-quality)
 - **Requirements Management**: Categorized requirements with priorities and acceptance criteria
-- **Design Inputs/Outputs**: Traceable design artifacts with requirement linking
+- **Design Inputs/Outputs**: Traceable design artifacts with automatic requirement linking
+- **Verification Management**: Dedicated verification entities that validate design outputs
 - **Design Controls**: Review, inspection, test, and validation processes
 - **Risk Management**: Categorical risk assessment with probability/impact scoring
 - **Monte Carlo Risk Analysis**: Statistical risk assessment with confidence intervals and recommendations
 - **Auto-Scoring Engine**: Rule-based risk scoring with configurable thresholds and confidence metrics
 - **Traceability Matrix**: Comprehensive link management with gap analysis and coverage reporting
+- **Interactive Editing**: Full CRUD operations for all quality entities with guided workflows
 
 ### Project Management (tessera-pm)
 - **Task Management**: Task hierarchy with dependencies, effort tracking, and progress monitoring
@@ -138,6 +144,8 @@ cargo run -- link validate
 ### CLI Application (tessera)
 - **Command Structure**: Hierarchical commands with module-specific subcommands
 - **Interactive Mode**: inquire-based prompts with fuzzy search and rich formatting
+- **Menu Organization**: Hierarchical menu structure with category-based navigation (📋 Manage Entities, 📊 Analysis Tools, ⚙️ Settings, 📈 Dashboard)
+- **Entity Management**: Full CRUD operations with guided workflows and automatic linking
 - **Async Architecture**: Tokio-based async runtime for future extensibility
 - **Rich Output**: Colored terminal output with tables and progress indicators
 
@@ -150,6 +158,7 @@ quality/
   requirements.ron   # Design requirements
   inputs.ron         # Design inputs
   outputs.ron        # Design outputs
+  verifications.ron  # Verification activities
   controls.ron       # Design controls
   risks.ron          # Risk registry
 pm/
@@ -174,6 +183,28 @@ tol/
 - **Trait-Based Architecture**: Entity and Repository traits for consistent CRUD operations
 - **Validation**: Built-in validation for all data structures
 - **Error Propagation**: Comprehensive error handling with context preservation
+
+### Quality Module Workflow and Linking
+The quality module implements a structured workflow with automatic linking between entities:
+
+#### Entity Relationships
+- **Requirements → Design Inputs**: Each design input implements exactly one requirement
+- **Design Inputs → Design Outputs**: Each design output satisfies exactly one design input
+- **Design Outputs → Verifications**: Each verification validates exactly one design output
+- **Design Outputs → Design Controls**: Design controls can be linked to multiple design outputs
+
+#### Interactive Workflow
+- **Guided Creation**: When creating design outputs, users must first select the design input being satisfied
+- **Automatic Linking**: Links are established automatically during entity creation
+- **Validation**: The system ensures required entities exist before allowing dependent entities to be created
+- **Edit Capabilities**: Full editing support for requirements and risks, with additional entities coming soon
+
+#### Menu Organization
+The quality interactive mode is organized into logical categories:
+- **📋 Manage Entities**: CRUD operations for all quality entities
+- **📊 Analysis Tools**: Risk assessment, scoring, and traceability matrix
+- **⚙️ Settings**: Risk scoring configuration and tolerance thresholds
+- **📈 Dashboard**: Quality overview and status
 
 ### Module Integration
 - **Core Traits**: Shared interfaces for entities, repositories, and linking
@@ -223,6 +254,30 @@ tol/
 - Implement interactive mode handlers
 - Use consistent error handling and user feedback
 - Support both command-line and interactive usage patterns
+
+## Quality Module Implementation Status
+
+### Completed Features
+- **Requirements Management**: Full CRUD operations with interactive editing
+- **Design Inputs/Outputs**: Creation with automatic requirement/input linking
+- **Verification Management**: Creation with automatic output linking
+- **Risk Management**: Full CRUD operations with scoring and assessment
+- **Menu Organization**: Hierarchical menu structure with category-based navigation
+- **Guided Workflows**: Step-by-step creation with validation and link establishment
+- **Migration System**: Automatic data migration for schema updates
+
+### Current Limitations
+- **Editing Support**: Currently available for requirements and risks only
+- **Design Input Editing**: Coming soon (placeholder implemented)
+- **Design Output Editing**: Coming soon (placeholder implemented)
+- **Verification Editing**: Coming soon (placeholder implemented)
+- **Design Control Editing**: Coming soon (placeholder implemented)
+
+### Recent Improvements
+- **Simplified Linking**: Removed complex manual linking in favor of automatic linking during creation
+- **Better UX**: Users select the parent entity first, then create the child entity
+- **Validation**: System prevents creating child entities without required parent entities
+- **Menu Structure**: Organized into logical categories for better navigation
 
 ## Common Issues and Solutions
 
