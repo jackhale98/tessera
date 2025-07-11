@@ -116,66 +116,37 @@ impl TraceabilityMatrix {
 
     /// Discover existing links from repository data
     fn discover_existing_links(&mut self, repository: &QualityRepository) {
-        // Links from requirements to inputs via the linked_inputs field
-        for requirement in repository.get_requirements() {
-            for &input_id in &requirement.linked_inputs {
-                self.add_link(TraceabilityLink {
-                    source_id: requirement.id,
-                    target_id: input_id,
-                    relation: TraceabilityRelation::Implements,
-                    confidence: 0.9,
-                    notes: "Auto-discovered from requirement linked inputs".to_string(),
-                });
-            }
-        }
-
-        // Links from inputs to requirements
+        // Links from requirements to inputs via the requirement_id field
         for input in repository.get_inputs() {
-            for &req_id in &input.requirements {
-                self.add_link(TraceabilityLink {
-                    source_id: req_id,
-                    target_id: input.id,
-                    relation: TraceabilityRelation::Implements,
-                    confidence: 0.9,
-                    notes: "Auto-discovered from input requirements".to_string(),
-                });
-            }
+            self.add_link(TraceabilityLink {
+                source_id: input.requirement_id,
+                target_id: input.id,
+                relation: TraceabilityRelation::Implements,
+                confidence: 0.9,
+                notes: "Auto-discovered from input requirement reference".to_string(),
+            });
         }
 
-        // Links from outputs to inputs
+        // Links from inputs to outputs via the input_id field
         for output in repository.get_outputs() {
-            for &input_id in &output.linked_inputs {
-                self.add_link(TraceabilityLink {
-                    source_id: input_id,
-                    target_id: output.id,
-                    relation: TraceabilityRelation::Satisfies,
-                    confidence: 0.9,
-                    notes: "Auto-discovered from output inputs".to_string(),
-                });
-            }
-
-            for &input_id in &output.linked_inputs {
-                self.add_link(TraceabilityLink {
-                    source_id: input_id,
-                    target_id: output.id,
-                    relation: TraceabilityRelation::Verifies,
-                    confidence: 0.8,
-                    notes: "Auto-discovered from output inputs".to_string(),
-                });
-            }
+            self.add_link(TraceabilityLink {
+                source_id: output.input_id,
+                target_id: output.id,
+                relation: TraceabilityRelation::Satisfies,
+                confidence: 0.9,
+                notes: "Auto-discovered from output input reference".to_string(),
+            });
         }
 
-        // Links from verifications to outputs
+        // Links from outputs to verifications via the output_id field
         for verification in repository.get_verifications() {
-            for &output_id in &verification.linked_outputs {
-                self.add_link(TraceabilityLink {
-                    source_id: output_id,
-                    target_id: verification.id,
-                    relation: TraceabilityRelation::Controls,
-                    confidence: 0.9,
-                    notes: "Auto-discovered from verification outputs".to_string(),
-                });
-            }
+            self.add_link(TraceabilityLink {
+                source_id: verification.output_id,
+                target_id: verification.id,
+                relation: TraceabilityRelation::Controls,
+                confidence: 0.9,
+                notes: "Auto-discovered from verification output reference".to_string(),
+            });
         }
     }
 

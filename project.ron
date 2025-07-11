@@ -1,9 +1,9 @@
 (
-    id: "project-7e672479-5880-456a-9d8b-bb9f58a00e59",
+    id: "project-aa657096-ba1f-4ca4-891d-57dd8c6679f6",
     name: "Test Project",
     version: "0.1.0",
-    description: "Test project for linking functionality",
-    created: "2025-07-10T20:29:15.741384131Z",
+    description: "Engineering project: Test Project",
+    created: "2025-07-11T02:24:32.048477075Z",
     modules: [
         "pm",
         "quality",
@@ -11,4 +11,17 @@
     ],
     git_repo: None,
     metadata: {},
+    quality_settings: (
+        risk_probability_range: (
+            range: (1, 5, 1),
+        ),
+        risk_impact_range: (
+            range: (1, 5, 1),
+        ),
+        risk_tolerance_thresholds: (
+            bar_threshold: 0.25,
+            afap_threshold: 0.5,
+            int_threshold: 0.75,
+        ),
+    ),
 )

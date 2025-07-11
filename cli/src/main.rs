@@ -83,6 +83,10 @@ enum QualityCommands {
     #[command(name = "req:list")]
     ListRequirements,
     
+    /// Edit a requirement
+    #[command(name = "req:edit")]
+    EditRequirement,
+    
     /// Add a design input
     #[command(name = "input:add")]
     AddInput,
@@ -91,9 +95,10 @@ enum QualityCommands {
     #[command(name = "input:list")]
     ListInputs,
     
-    /// Link input to requirement
-    #[command(name = "input:link-req")]
-    LinkInputToRequirement,
+    /// Edit a design input
+    #[command(name = "input:edit")]
+    EditInput,
+    
     
     /// Add a design output
     #[command(name = "output:add")]
@@ -103,10 +108,11 @@ enum QualityCommands {
     #[command(name = "output:list")]
     ListOutputs,
     
+    /// Edit a design output
+    #[command(name = "output:edit")]
+    EditOutput,
     
-    /// Link output to input
-    #[command(name = "output:link-input")]
-    LinkOutputToInput,
+    
     
     /// Add a verification
     #[command(name = "verification:add")]
@@ -116,9 +122,22 @@ enum QualityCommands {
     #[command(name = "verification:list")]
     ListVerifications,
     
-    /// Link verification to output
-    #[command(name = "verification:link-output")]
-    LinkVerificationToOutput,
+    /// Edit a verification
+    #[command(name = "verification:edit")]
+    EditVerification,
+    
+    
+    /// Add a design control
+    #[command(name = "control:add")]
+    AddControl,
+    
+    /// List design controls
+    #[command(name = "control:list")]
+    ListControls,
+    
+    /// Edit a design control
+    #[command(name = "control:edit")]
+    EditControl,
     
     /// Add a risk
     #[command(name = "risk:add")]
@@ -127,6 +146,10 @@ enum QualityCommands {
     /// List risks
     #[command(name = "risk:list")]
     ListRisks,
+    
+    /// Edit a risk
+    #[command(name = "risk:edit")]
+    EditRisk,
     
     /// Assess project risks
     #[command(name = "risk:assess")]

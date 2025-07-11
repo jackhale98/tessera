@@ -5,6 +5,138 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QualitySettings {
+    pub risk_probability_range: RiskScoringConfig,
+    pub risk_impact_range: RiskScoringConfig,
+    pub risk_tolerance_thresholds: RiskToleranceThresholds,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiskToleranceThresholds {
+    pub bar_threshold: f64,    // Broadly Acceptable Risk - below this is acceptable
+    pub afap_threshold: f64,   // As Far As Practicable - between BAR and this needs reduction
+    pub int_threshold: f64,    // Intolerable - above this is unacceptable
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiskScoringConfig {
+    pub range: [i32; 3], // [start, end, step] e.g., [1, 5, 1] or [2, 10, 2]
+}
+
+impl Default for RiskScoringConfig {
+    fn default() -> Self {
+        Self {
+            range: [1, 5, 1], // Default 1-5 range with step 1
+        }
+    }
+}
+
+impl RiskScoringConfig {
+    pub fn new(start: i32, end: i32, step: i32) -> Self {
+        Self {
+            range: [start, end, step],
+        }
+    }
+    
+    pub fn from_vec(range_vec: Vec<i32>) -> Result<Self> {
+        if range_vec.len() != 3 {
+            return Err(crate::DesignTrackError::Validation(
+                "Range must have exactly 3 values: [start, end, step]".to_string()
+            ));
+        }
+        if range_vec[0] >= range_vec[1] {
+            return Err(crate::DesignTrackError::Validation(
+                "Start value must be less than end value".to_string()
+            ));
+        }
+        if range_vec[2] <= 0 {
+            return Err(crate::DesignTrackError::Validation(
+                "Step must be greater than 0".to_string()
+            ));
+        }
+        Ok(Self {
+            range: [range_vec[0], range_vec[1], range_vec[2]],
+        })
+    }
+    
+    pub fn values(&self) -> Vec<i32> {
+        (self.range[0]..=self.range[1])
+            .step_by(self.range[2] as usize)
+            .collect()
+    }
+    
+    pub fn normalize_to_0_1(&self, value: i32) -> f64 {
+        (value - self.range[0]) as f64 / (self.range[1] - self.range[0]) as f64
+    }
+}
+
+impl Default for RiskToleranceThresholds {
+    fn default() -> Self {
+        Self {
+            bar_threshold: 0.25,   // 25% of max possible score
+            afap_threshold: 0.50,  // 50% of max possible score
+            int_threshold: 0.75,   // 75% of max possible score
+        }
+    }
+}
+
+impl RiskToleranceThresholds {
+    pub fn new(bar: f64, afap: f64, int: f64) -> Result<Self> {
+        if bar >= afap || afap >= int || int > 1.0 || bar < 0.0 {
+            return Err(crate::DesignTrackError::Validation(
+                "Risk thresholds must be: 0.0 ≤ BAR < AFAP < INT ≤ 1.0".to_string()
+            ));
+        }
+        Ok(Self {
+            bar_threshold: bar,
+            afap_threshold: afap,
+            int_threshold: int,
+        })
+    }
+    
+    pub fn categorize_risk(&self, normalized_score: f64) -> RiskCategory {
+        if normalized_score < self.bar_threshold {
+            RiskCategory::BroadlyAcceptable
+        } else if normalized_score < self.afap_threshold {
+            RiskCategory::TolerableWithReduction
+        } else if normalized_score < self.int_threshold {
+            RiskCategory::AsFarAsPracticable
+        } else {
+            RiskCategory::Intolerable
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum RiskCategory {
+    BroadlyAcceptable,      // BAR - Below BAR threshold
+    TolerableWithReduction, // Between BAR and AFAP - should be reduced where reasonably practicable
+    AsFarAsPracticable,     // Between AFAP and INT - must be reduced as far as practicable
+    Intolerable,            // Above INT - not acceptable
+}
+
+impl std::fmt::Display for RiskCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RiskCategory::BroadlyAcceptable => write!(f, "BAR (Broadly Acceptable)"),
+            RiskCategory::TolerableWithReduction => write!(f, "Tolerable (with reduction)"),
+            RiskCategory::AsFarAsPracticable => write!(f, "AFAP (As Far As Practicable)"),
+            RiskCategory::Intolerable => write!(f, "INT (Intolerable)"),
+        }
+    }
+}
+
+impl Default for QualitySettings {
+    fn default() -> Self {
+        Self {
+            risk_probability_range: RiskScoringConfig::default(),
+            risk_impact_range: RiskScoringConfig::default(),
+            risk_tolerance_thresholds: RiskToleranceThresholds::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectMetadata {
     pub id: String,
     pub name: String,
@@ -14,6 +146,7 @@ pub struct ProjectMetadata {
     pub modules: Vec<String>,
     pub git_repo: Option<String>,
     pub metadata: IndexMap<String, String>,
+    pub quality_settings: QualitySettings,
 }
 
 impl ProjectMetadata {
@@ -27,13 +160,45 @@ impl ProjectMetadata {
             modules: vec!["pm".to_string(), "quality".to_string(), "tol".to_string()],
             git_repo: None,
             metadata: IndexMap::new(),
+            quality_settings: QualitySettings::default(),
         }
     }
     
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = std::fs::read_to_string(path)?;
-        let metadata: ProjectMetadata = ron::from_str(&content)?;
-        Ok(metadata)
+        
+        // Try to load with current structure first
+        match ron::from_str::<ProjectMetadata>(&content) {
+            Ok(metadata) => Ok(metadata),
+            Err(_) => {
+                // If loading fails, try loading with partial structure and add defaults
+                // This handles migration from older project files
+                #[derive(Deserialize)]
+                struct PartialProjectMetadata {
+                    id: String,
+                    name: String,
+                    version: String,
+                    description: String,
+                    created: DateTime<Utc>,
+                    modules: Vec<String>,
+                    git_repo: Option<String>,
+                    metadata: IndexMap<String, String>,
+                }
+                
+                let partial: PartialProjectMetadata = ron::from_str(&content)?;
+                Ok(ProjectMetadata {
+                    id: partial.id,
+                    name: partial.name,
+                    version: partial.version,
+                    description: partial.description,
+                    created: partial.created,
+                    modules: partial.modules,
+                    git_repo: partial.git_repo,
+                    metadata: partial.metadata,
+                    quality_settings: QualitySettings::default(), // Add default quality settings
+                })
+            }
+        }
     }
     
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {

@@ -1,16 +1,1 @@
-[
-    (
-        id: ("2b880cea-c97a-4f02-96c4-dd63518927e9"),
-        name: "this is a risk",
-        description: "this a for sure a risk",
-        category: "Cost",
-        probability: 0.5,
-        impact: 0.5,
-        risk_score: 0.25,
-        mitigation_strategy: "",
-        status: Identified,
-        owner: "",
-        created: "2025-07-11T01:37:49.094008612Z",
-        updated: "2025-07-11T01:37:49.094022281Z",
-    ),
-]
+[]

@@ -66,11 +66,11 @@ impl RiskAnalyzer {
         let prob_std = 0.1;
         let impact_std = 0.1;
         
-        let prob_dist = Normal::new(risk.probability, prob_std).map_err(|e| {
+        let prob_dist = Normal::new(risk.probability as f64, prob_std).map_err(|e| {
             tessera_core::DesignTrackError::Module(format!("Failed to create probability distribution: {}", e))
         })?;
         
-        let impact_dist = Normal::new(risk.impact, impact_std).map_err(|e| {
+        let impact_dist = Normal::new(risk.impact as f64, impact_std).map_err(|e| {
             tessera_core::DesignTrackError::Module(format!("Failed to create impact distribution: {}", e))
         })?;
         
@@ -196,7 +196,7 @@ mod tests {
         let risk = Risk::new(
             "Test Risk".to_string(),
             "A test risk for analysis".to_string(),
-            RiskCategory::Technical,
+            "Technical".to_string(),
         );
         
         let result = analyzer.analyze_risk(&risk).unwrap();

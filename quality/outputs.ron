@@ -1,1 +1,13 @@
-[]
+[
+    (
+        id: ("5edf5700-6468-46d3-9833-1993a192c7c3"),
+        name: "DO1",
+        description: "new design output",
+        output_type: "Drawing",
+        file_path: None,
+        input_id: ("5050c19b-4dc9-407a-809e-9f91ba8e0f56"),
+        linked_verifications: [],
+        created: "2025-07-11T02:25:52.685348295Z",
+        updated: "2025-07-11T02:25:52.685348295Z",
+    ),
+]

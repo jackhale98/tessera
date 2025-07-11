@@ -30,9 +30,9 @@ impl Default for RiskThresholds {
 pub struct CalculatedRiskScore {
     pub risk_id: tessera_core::Id,
     pub risk_name: String,
-    pub probability: f64,
-    pub impact: f64,
-    pub total_score: f64,
+    pub probability: i32,
+    pub impact: i32,
+    pub total_score: f64, // Normalized result of probability × impact
     pub risk_level: RiskLevel,
     pub confidence: f64,
 }
@@ -46,7 +46,7 @@ impl QualityRiskScorer {
 
     /// Calculate risk score for a single risk
     pub fn calculate_risk_score(&self, risk: &Risk) -> CalculatedRiskScore {
-        let total_score = risk.probability * risk.impact;
+        let total_score = risk.risk_score; // Use the already calculated normalized score
         let risk_level = self.determine_risk_level(total_score);
         
         CalculatedRiskScore {

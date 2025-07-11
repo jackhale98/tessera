@@ -30,6 +30,10 @@ impl QualityCommands {
             .with_help_message("Detailed description of the requirement")
             .prompt()?;
         
+        let source = Text::new("Source:")
+            .with_help_message("Source of requirement (customer, regulation, standard, etc.)")
+            .prompt()?;
+        
         let categories = vec![
             "Functional",
             "Performance", 
@@ -44,7 +48,7 @@ impl QualityCommands {
         
         let category = Select::new("Category:", categories).prompt()?.to_string();
         
-        let requirement = Requirement::new(name, description, category);
+        let requirement = Requirement::new(name, description, source, category);
         self.repository.add_requirement(requirement.clone())?;
         
         let quality_dir = self.project_context.module_path("quality");
@@ -98,20 +102,27 @@ impl QualityCommands {
         
         let category = Select::new("Risk category:", risk_categories).prompt()?.to_string();
         
-        let probability_str = Text::new("Probability (0.0 - 1.0):")
-            .with_default("0.5")
-            .prompt()?;
-        let probability: f64 = probability_str.parse().unwrap_or(0.5);
+        // Get risk scoring configuration from project
+        let prob_config = &self.project_context.metadata.quality_settings.risk_probability_range;
+        let impact_config = &self.project_context.metadata.quality_settings.risk_impact_range;
         
-        let impact_str = Text::new("Impact (0.0 - 1.0):")
-            .with_default("0.5")
+        let prob_values = prob_config.values();
+        let impact_values = impact_config.values();
+        
+        let probability_str = Text::new(&format!("Probability [values available: {:?}]:", prob_values))
+            .with_default(&prob_values[0].to_string())
             .prompt()?;
-        let impact: f64 = impact_str.parse().unwrap_or(0.5);
+        let probability: i32 = probability_str.parse().unwrap_or(prob_values[0]);
+        
+        let impact_str = Text::new(&format!("Impact [values available: {:?}]:", impact_values))
+            .with_default(&impact_values[0].to_string())
+            .prompt()?;
+        let impact: i32 = impact_str.parse().unwrap_or(impact_values[0]);
         
         let mut risk = Risk::new(name, description, category);
-        risk.probability = probability.clamp(0.0, 1.0);
-        risk.impact = impact.clamp(0.0, 1.0);
-        risk.update_risk_score();
+        risk.probability = probability;
+        risk.impact = impact;
+        risk.update_risk_score(prob_config, impact_config);
         
         self.repository.add_risk(risk.clone())?;
         

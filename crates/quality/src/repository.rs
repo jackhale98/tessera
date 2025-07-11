@@ -8,6 +8,7 @@ pub struct QualityRepository {
     outputs: Vec<DesignOutput>,
     verifications: Vec<Verification>,
     risks: Vec<Risk>,
+    controls: Vec<DesignControl>,
 }
 
 impl QualityRepository {
@@ -18,6 +19,7 @@ impl QualityRepository {
             outputs: Vec::new(),
             verifications: Vec::new(),
             risks: Vec::new(),
+            controls: Vec::new(),
         }
     }
     
@@ -50,6 +52,11 @@ impl QualityRepository {
             repo.risks = Vec::<Risk>::load_from_file(&risks_file)?;
         }
         
+        let controls_file = dir.join("controls.ron");
+        if controls_file.exists() {
+            repo.controls = Vec::<DesignControl>::load_from_file(&controls_file)?;
+        }
+        
         Ok(repo)
     }
     
@@ -62,6 +69,7 @@ impl QualityRepository {
         Vec::<DesignOutput>::save_to_file(&self.outputs, dir.join("outputs.ron"))?;
         Vec::<Verification>::save_to_file(&self.verifications, dir.join("verifications.ron"))?;
         Vec::<Risk>::save_to_file(&self.risks, dir.join("risks.ron"))?;
+        Vec::<DesignControl>::save_to_file(&self.controls, dir.join("controls.ron"))?;
         
         Ok(())
     }
@@ -96,6 +104,12 @@ impl QualityRepository {
         Ok(())
     }
     
+    pub fn add_control(&mut self, control: DesignControl) -> Result<()> {
+        control.validate()?;
+        self.controls.push(control);
+        Ok(())
+    }
+    
     pub fn get_requirements(&self) -> &[Requirement] {
         &self.requirements
     }
@@ -116,6 +130,10 @@ impl QualityRepository {
         &self.risks
     }
     
+    pub fn get_controls(&self) -> &[DesignControl] {
+        &self.controls
+    }
+    
     pub fn find_requirement_by_id(&self, id: Id) -> Option<&Requirement> {
         self.requirements.iter().find(|r| r.id == id)
     }
@@ -130,6 +148,14 @@ impl QualityRepository {
     
     pub fn find_verification_by_id(&self, id: Id) -> Option<&Verification> {
         self.verifications.iter().find(|v| v.id == id)
+    }
+    
+    pub fn find_risk_by_id(&self, id: Id) -> Option<&Risk> {
+        self.risks.iter().find(|r| r.id == id)
+    }
+    
+    pub fn find_control_by_id(&self, id: Id) -> Option<&DesignControl> {
+        self.controls.iter().find(|c| c.id == id)
     }
     
     pub fn search_requirements(&self, query: &str) -> Vec<&Requirement> {
@@ -152,8 +178,8 @@ impl QualityRepository {
         self.risks.iter().filter(|r| r.matches_search(query)).collect()
     }
     
-    pub fn find_risk_by_id(&self, id: Id) -> Option<&Risk> {
-        self.risks.iter().find(|r| r.id == id)
+    pub fn search_controls(&self, query: &str) -> Vec<&DesignControl> {
+        self.controls.iter().filter(|c| c.matches_search(query)).collect()
     }
     
     pub fn get_all_requirements(&self) -> &[Requirement] {
@@ -172,48 +198,9 @@ impl QualityRepository {
         }
     }
     
-    pub fn link_input_to_requirement(&mut self, input_id: Id, requirement_id: Id) -> Result<()> {
-        if let Some(input) = self.inputs.iter_mut().find(|i| i.id == input_id) {
-            input.add_requirement(requirement_id);
-            if let Some(requirement) = self.requirements.iter_mut().find(|r| r.id == requirement_id) {
-                requirement.add_input(input_id);
-            }
-            Ok(())
-        } else {
-            Err(tessera_core::DesignTrackError::NotFound(
-                format!("Input with id {} not found", input_id)
-            ))
-        }
-    }
-    
-    
-    pub fn link_output_to_input(&mut self, output_id: Id, input_id: Id) -> Result<()> {
-        if let Some(output) = self.outputs.iter_mut().find(|o| o.id == output_id) {
-            output.add_input(input_id);
-            if let Some(input) = self.inputs.iter_mut().find(|i| i.id == input_id) {
-                input.add_output(output_id);
-            }
-            Ok(())
-        } else {
-            Err(tessera_core::DesignTrackError::NotFound(
-                format!("Output with id {} not found", output_id)
-            ))
-        }
-    }
-    
-    pub fn link_verification_to_output(&mut self, verification_id: Id, output_id: Id) -> Result<()> {
-        if let Some(verification) = self.verifications.iter_mut().find(|v| v.id == verification_id) {
-            verification.add_output(output_id);
-            if let Some(output) = self.outputs.iter_mut().find(|o| o.id == output_id) {
-                output.add_verification(verification_id);
-            }
-            Ok(())
-        } else {
-            Err(tessera_core::DesignTrackError::NotFound(
-                format!("Verification with id {} not found", verification_id)
-            ))
-        }
-    }
+    // Note: Direct linking methods removed in favor of automatic workflow
+    // New workflow: Inputs select requirements, Outputs select inputs, Verifications select outputs
+    // This eliminates complex bidirectional linking in favor of simple direct references
 }
 
 // Helper functions for loading/saving RON files
@@ -488,6 +475,57 @@ impl Repository<Risk> for Vec<Risk> {
     }
     
     fn list(&self) -> &[Risk] {
+        self
+    }
+}
+
+impl Repository<DesignControl> for Vec<DesignControl> {
+    fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<DesignControl>> {
+        load_items_from_file(path)
+    }
+    
+    fn save_to_file<P: AsRef<Path>>(items: &[DesignControl], path: P) -> Result<()> {
+        save_items_to_file(items, path)
+    }
+    
+    fn find_by_id(&self, id: Id) -> Option<&DesignControl> {
+        self.iter().find(|item| item.id() == id)
+    }
+    
+    fn find_by_name(&self, name: &str) -> Option<&DesignControl> {
+        self.iter().find(|item| item.name() == name)
+    }
+    
+    fn add(&mut self, item: DesignControl) -> Result<()> {
+        item.validate()?;
+        self.push(item);
+        Ok(())
+    }
+    
+    fn update(&mut self, item: DesignControl) -> Result<()> {
+        item.validate()?;
+        if let Some(pos) = self.iter().position(|existing| existing.id() == item.id()) {
+            self[pos] = item;
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Item with id {} not found", item.id())
+            ))
+        }
+    }
+    
+    fn remove(&mut self, id: Id) -> Result<()> {
+        if let Some(pos) = self.iter().position(|item| item.id() == id) {
+            self.remove(pos);
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Item with id {} not found", id)
+            ))
+        }
+    }
+    
+    fn list(&self) -> &[DesignControl] {
         self
     }
 }

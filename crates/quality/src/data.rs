@@ -7,13 +7,12 @@ pub struct Requirement {
     pub id: Id,
     pub name: String,
     pub description: String,
+    pub source: String, // Source of the requirement (customer, regulation, standard, etc.)
     pub category: String,
     pub priority: Priority,
     pub status: RequirementStatus,
-    pub acceptance_criteria: Vec<String>,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
-    pub linked_inputs: Vec<Id>,
 }
 
 
@@ -59,31 +58,22 @@ impl Entity for Requirement {
 
 
 impl Requirement {
-    pub fn new(name: String, description: String, category: String) -> Self {
+    pub fn new(name: String, description: String, source: String, category: String) -> Self {
         let now = Utc::now();
         Self {
             id: Id::new(),
             name,
             description,
+            source,
             category,
             priority: Priority::Medium,
             status: RequirementStatus::Draft,
-            acceptance_criteria: Vec::new(),
             created: now,
             updated: now,
-            linked_inputs: Vec::new(),
         }
     }
     
-    pub fn add_input(&mut self, input_id: Id) {
-        if !self.linked_inputs.contains(&input_id) {
-            self.linked_inputs.push(input_id);
-            self.updated = Utc::now();
-        }
-    }
-    
-    pub fn remove_input(&mut self, input_id: Id) {
-        self.linked_inputs.retain(|&id| id != input_id);
+    pub fn update_timestamp(&mut self) {
         self.updated = Utc::now();
     }
     
@@ -91,6 +81,7 @@ impl Requirement {
         let query_lower = query.to_lowercase();
         self.name.to_lowercase().contains(&query_lower) ||
         self.description.to_lowercase().contains(&query_lower) ||
+        self.source.to_lowercase().contains(&query_lower) ||
         self.category.to_lowercase().contains(&query_lower)
     }
 }
@@ -101,8 +92,8 @@ pub struct DesignInput {
     pub name: String,
     pub description: String,
     pub input_type: String,
-    pub source: String,
-    pub requirements: Vec<Id>,
+    pub requirement_id: Id, // Single requirement this input addresses
+    pub acceptance_criteria: Vec<String>, // Moved from requirements
     pub linked_outputs: Vec<Id>,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
@@ -129,31 +120,19 @@ impl Entity for DesignInput {
 }
 
 impl DesignInput {
-    pub fn new(name: String, description: String, input_type: String, source: String) -> Self {
+    pub fn new(name: String, description: String, input_type: String, requirement_id: Id) -> Self {
         let now = Utc::now();
         Self {
             id: Id::new(),
             name,
             description,
             input_type,
-            source,
-            requirements: Vec::new(),
+            requirement_id,
+            acceptance_criteria: Vec::new(),
             linked_outputs: Vec::new(),
             created: now,
             updated: now,
         }
-    }
-    
-    pub fn add_requirement(&mut self, req_id: Id) {
-        if !self.requirements.contains(&req_id) {
-            self.requirements.push(req_id);
-            self.updated = Utc::now();
-        }
-    }
-    
-    pub fn remove_requirement(&mut self, req_id: Id) {
-        self.requirements.retain(|&id| id != req_id);
-        self.updated = Utc::now();
     }
     
     pub fn add_output(&mut self, output_id: Id) {
@@ -168,12 +147,15 @@ impl DesignInput {
         self.updated = Utc::now();
     }
     
+    pub fn update_timestamp(&mut self) {
+        self.updated = Utc::now();
+    }
+    
     pub fn matches_search(&self, query: &str) -> bool {
         let query_lower = query.to_lowercase();
         self.name.to_lowercase().contains(&query_lower) ||
         self.description.to_lowercase().contains(&query_lower) ||
-        self.input_type.to_lowercase().contains(&query_lower) ||
-        self.source.to_lowercase().contains(&query_lower)
+        self.input_type.to_lowercase().contains(&query_lower)
     }
 }
 
@@ -184,7 +166,7 @@ pub struct DesignOutput {
     pub description: String,
     pub output_type: String,
     pub file_path: Option<String>,
-    pub linked_inputs: Vec<Id>,
+    pub input_id: Id, // Single design input this output implements
     pub linked_verifications: Vec<Id>,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
@@ -211,7 +193,7 @@ impl Entity for DesignOutput {
 }
 
 impl DesignOutput {
-    pub fn new(name: String, description: String, output_type: String) -> Self {
+    pub fn new(name: String, description: String, output_type: String, input_id: Id) -> Self {
         let now = Utc::now();
         Self {
             id: Id::new(),
@@ -219,22 +201,14 @@ impl DesignOutput {
             description,
             output_type,
             file_path: None,
-            linked_inputs: Vec::new(),
+            input_id,
             linked_verifications: Vec::new(),
             created: now,
             updated: now,
         }
     }
     
-    pub fn add_input(&mut self, input_id: Id) {
-        if !self.linked_inputs.contains(&input_id) {
-            self.linked_inputs.push(input_id);
-            self.updated = Utc::now();
-        }
-    }
-    
-    pub fn remove_input(&mut self, input_id: Id) {
-        self.linked_inputs.retain(|&id| id != input_id);
+    pub fn update_timestamp(&mut self) {
         self.updated = Utc::now();
     }
     
@@ -266,7 +240,7 @@ pub struct Verification {
     pub verification_type: String,
     pub procedure: String,
     pub responsible_party: String,
-    pub linked_outputs: Vec<Id>,
+    pub output_id: Id, // Single design output this verification tests
     pub status: VerificationStatus,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
@@ -302,7 +276,7 @@ impl Entity for Verification {
 }
 
 impl Verification {
-    pub fn new(name: String, description: String, verification_type: String) -> Self {
+    pub fn new(name: String, description: String, verification_type: String, output_id: Id) -> Self {
         let now = Utc::now();
         Self {
             id: Id::new(),
@@ -311,22 +285,14 @@ impl Verification {
             verification_type,
             procedure: String::new(),
             responsible_party: String::new(),
-            linked_outputs: Vec::new(),
+            output_id,
             status: VerificationStatus::Planned,
             created: now,
             updated: now,
         }
     }
     
-    pub fn add_output(&mut self, output_id: Id) {
-        if !self.linked_outputs.contains(&output_id) {
-            self.linked_outputs.push(output_id);
-            self.updated = Utc::now();
-        }
-    }
-    
-    pub fn remove_output(&mut self, output_id: Id) {
-        self.linked_outputs.retain(|&id| id != output_id);
+    pub fn update_timestamp(&mut self) {
         self.updated = Utc::now();
     }
     
@@ -346,9 +312,13 @@ pub struct Risk {
     pub name: String,
     pub description: String,
     pub category: String,
-    pub probability: f64,
-    pub impact: f64,
-    pub risk_score: f64,
+    pub failure_mode: String,      // What fails
+    pub cause_of_failure: String,  // Why it fails  
+    pub effect_of_failure: String, // Impact of failure
+    pub reference: Option<String>, // Reference to source document/analysis
+    pub probability: i32,          // Using configured range values
+    pub impact: i32,               // Using configured range values
+    pub risk_score: f64,           // Product of normalized probability × impact
     pub mitigation_strategy: String,
     pub status: RiskStatus,
     pub owner: String,
@@ -389,16 +359,7 @@ impl Entity for Risk {
                 "Risk name cannot be empty".to_string()
             ));
         }
-        if self.probability < 0.0 || self.probability > 1.0 {
-            return Err(tessera_core::DesignTrackError::Validation(
-                "Risk probability must be between 0.0 and 1.0".to_string()
-            ));
-        }
-        if self.impact < 0.0 || self.impact > 1.0 {
-            return Err(tessera_core::DesignTrackError::Validation(
-                "Risk impact must be between 0.0 and 1.0".to_string()
-            ));
-        }
+        // Validation for probability and impact will be done against configured ranges
         Ok(())
     }
 }
@@ -411,9 +372,13 @@ impl Risk {
             name,
             description,
             category,
-            probability: 0.5,
-            impact: 0.5,
-            risk_score: 0.25,
+            failure_mode: String::new(),
+            cause_of_failure: String::new(),
+            effect_of_failure: String::new(),
+            reference: None,
+            probability: 1, // Default to minimum value of typical 1-5 range
+            impact: 1,      // Default to minimum value of typical 1-5 range
+            risk_score: 0.0,
             mitigation_strategy: String::new(),
             status: RiskStatus::Identified,
             owner: String::new(),
@@ -422,8 +387,19 @@ impl Risk {
         }
     }
     
-    pub fn update_risk_score(&mut self) {
-        self.risk_score = self.probability * self.impact;
+    pub fn update_risk_score(&mut self, prob_config: &tessera_core::RiskScoringConfig, impact_config: &tessera_core::RiskScoringConfig) {
+        let norm_prob = prob_config.normalize_to_0_1(self.probability);
+        let norm_impact = impact_config.normalize_to_0_1(self.impact);
+        self.risk_score = norm_prob * norm_impact;
+        self.updated = Utc::now();
+    }
+    
+    pub fn update_risk_score_with_category(&mut self, prob_config: &tessera_core::RiskScoringConfig, impact_config: &tessera_core::RiskScoringConfig, thresholds: &tessera_core::RiskToleranceThresholds) -> tessera_core::RiskCategory {
+        self.update_risk_score(prob_config, impact_config);
+        thresholds.categorize_risk(self.risk_score)
+    }
+    
+    pub fn update_timestamp(&mut self) {
         self.updated = Utc::now();
     }
     
@@ -431,7 +407,81 @@ impl Risk {
         let query_lower = query.to_lowercase();
         self.name.to_lowercase().contains(&query_lower) ||
         self.description.to_lowercase().contains(&query_lower) ||
+        self.failure_mode.to_lowercase().contains(&query_lower) ||
+        self.cause_of_failure.to_lowercase().contains(&query_lower) ||
+        self.effect_of_failure.to_lowercase().contains(&query_lower) ||
         self.mitigation_strategy.to_lowercase().contains(&query_lower) ||
         self.owner.to_lowercase().contains(&query_lower)
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DesignControl {
+    pub id: Id,
+    pub name: String,
+    pub description: String,
+    pub control_type: String,
+    pub implementation: String,
+    pub risk_id: Id, // Risk this control addresses
+    pub status: ControlStatus,
+    pub created: DateTime<Utc>,
+    pub updated: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ControlStatus {
+    Planned,
+    Implemented,
+    Verified,
+    Active,
+    Inactive,
+}
+
+impl Entity for DesignControl {
+    fn id(&self) -> Id {
+        self.id
+    }
+    
+    fn name(&self) -> &str {
+        &self.name
+    }
+    
+    fn validate(&self) -> Result<()> {
+        if self.name.is_empty() {
+            return Err(tessera_core::DesignTrackError::Validation(
+                "Design control name cannot be empty".to_string()
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl DesignControl {
+    pub fn new(name: String, description: String, control_type: String, risk_id: Id) -> Self {
+        let now = Utc::now();
+        Self {
+            id: Id::new(),
+            name,
+            description,
+            control_type,
+            implementation: String::new(),
+            risk_id,
+            status: ControlStatus::Planned,
+            created: now,
+            updated: now,
+        }
+    }
+    
+    pub fn update_timestamp(&mut self) {
+        self.updated = Utc::now();
+    }
+    
+    pub fn matches_search(&self, query: &str) -> bool {
+        let query_lower = query.to_lowercase();
+        self.name.to_lowercase().contains(&query_lower) ||
+        self.description.to_lowercase().contains(&query_lower) ||
+        self.control_type.to_lowercase().contains(&query_lower) ||
+        self.implementation.to_lowercase().contains(&query_lower)
+    }
+}
+

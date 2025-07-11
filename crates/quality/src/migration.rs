@@ -219,51 +219,62 @@ impl From<LegacyRequirement> for Requirement {
             id: legacy.id,
             name: legacy.name,
             description: legacy.description,
+            source: "Legacy Migration".to_string(), // Default source for migrated data
             category: legacy.category.into(),
             priority: legacy.priority,
             status: legacy.status,
-            acceptance_criteria: legacy.acceptance_criteria,
             created: legacy.created,
             updated: legacy.updated,
-            linked_inputs: legacy.links, // Map old links to new linked_inputs
         }
     }
 }
 
 impl From<LegacyDesignInput> for DesignInput {
     fn from(legacy: LegacyDesignInput) -> Self {
+        // For migration, we'll assign to the first requirement if any exist
+        let requirement_id = legacy.requirements.first().copied()
+            .unwrap_or_else(|| tessera_core::Id::new()); // Create placeholder if none
+        
         DesignInput {
             id: legacy.id,
             name: legacy.name,
             description: legacy.description,
             input_type: legacy.input_type.into(),
-            source: legacy.source,
+            requirement_id,
+            acceptance_criteria: Vec::new(), // Will be set separately in migration
+            linked_outputs: Vec::new(), // Initialize empty - will be rebuilt from bidirectional links
             created: legacy.created,
             updated: legacy.updated,
-            requirements: legacy.requirements,
-            linked_outputs: Vec::new(), // Initialize empty - will be rebuilt from bidirectional links
         }
     }
 }
 
 impl From<LegacyDesignOutput> for DesignOutput {
     fn from(legacy: LegacyDesignOutput) -> Self {
+        // For migration, we'll assign to the first input if any exist
+        let input_id = legacy.linked_inputs.first().copied()
+            .unwrap_or_else(|| tessera_core::Id::new()); // Create placeholder if none
+        
         DesignOutput {
             id: legacy.id,
             name: legacy.name,
             description: legacy.description,
             output_type: legacy.output_type.into(),
             file_path: None, // Initialize empty - not available in legacy data
+            input_id,
+            linked_verifications: Vec::new(), // Initialize empty - will be rebuilt from bidirectional links
             created: legacy.created,
             updated: legacy.updated,
-            linked_inputs: legacy.linked_inputs,
-            linked_verifications: Vec::new(), // Initialize empty - will be rebuilt from bidirectional links
         }
     }
 }
 
 impl From<LegacyDesignControl> for Verification {
     fn from(legacy: LegacyDesignControl) -> Self {
+        // For migration, we'll assign to the first output if any exist
+        let output_id = legacy.linked_outputs.first().copied()
+            .unwrap_or_else(|| tessera_core::Id::new()); // Create placeholder if none
+        
         Verification {
             id: legacy.id,
             name: legacy.name,
@@ -271,23 +282,31 @@ impl From<LegacyDesignControl> for Verification {
             verification_type: legacy.control_type.into(),
             procedure: String::new(), // Initialize empty - not available in legacy data
             responsible_party: String::new(), // Initialize empty - not available in legacy data
+            output_id,
             status: legacy.status,
             created: legacy.created,
             updated: legacy.updated,
-            linked_outputs: legacy.linked_outputs,
         }
     }
 }
 
 impl From<LegacyRisk> for Risk {
     fn from(legacy: LegacyRisk) -> Self {
+        // Convert legacy 0.0-1.0 range to 1-5 range for migration
+        let probability = ((legacy.probability * 4.0) + 1.0).round() as i32;
+        let impact = ((legacy.impact * 4.0) + 1.0).round() as i32;
+        
         Risk {
             id: legacy.id,
             name: legacy.name,
             description: legacy.description,
             category: legacy.category.into(),
-            probability: legacy.probability,
-            impact: legacy.impact,
+            failure_mode: String::new(), // Initialize empty - not available in legacy data
+            cause_of_failure: String::new(), // Initialize empty - not available in legacy data
+            effect_of_failure: String::new(), // Initialize empty - not available in legacy data
+            reference: None, // Initialize empty - not available in legacy data
+            probability: probability.clamp(1, 5),
+            impact: impact.clamp(1, 5),
             risk_score: legacy.risk_score,
             mitigation_strategy: String::new(), // Initialize empty - not available in legacy data
             owner: String::new(), // Initialize empty - not available in legacy data

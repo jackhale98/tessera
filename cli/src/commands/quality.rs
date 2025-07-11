@@ -9,17 +9,22 @@ pub async fn execute_quality_command(command: QualityCommands, project_ctx: Proj
     match command {
         QualityCommands::AddRequirement => add_requirement_interactive(project_ctx).await,
         QualityCommands::ListRequirements => list_requirements(project_ctx).await,
+        QualityCommands::EditRequirement => edit_requirement_interactive(project_ctx).await,
         QualityCommands::AddInput => add_input_interactive(project_ctx).await,
         QualityCommands::ListInputs => list_inputs(project_ctx).await,
-        QualityCommands::LinkInputToRequirement => link_input_to_requirement_interactive(project_ctx).await,
+        QualityCommands::EditInput => edit_input_interactive(project_ctx).await,
         QualityCommands::AddOutput => add_output_interactive(project_ctx).await,
         QualityCommands::ListOutputs => list_outputs(project_ctx).await,
-        QualityCommands::LinkOutputToInput => link_output_to_input_interactive(project_ctx).await,
+        QualityCommands::EditOutput => edit_output_interactive(project_ctx).await,
         QualityCommands::AddVerification => add_verification_interactive(project_ctx).await,
         QualityCommands::ListVerifications => list_verifications(project_ctx).await,
-        QualityCommands::LinkVerificationToOutput => link_verification_to_output_interactive(project_ctx).await,
+        QualityCommands::EditVerification => edit_verification_interactive(project_ctx).await,
+        QualityCommands::AddControl => add_control_interactive(project_ctx).await,
+        QualityCommands::ListControls => list_controls(project_ctx).await,
+        QualityCommands::EditControl => edit_control_interactive(project_ctx).await,
         QualityCommands::AddRisk => add_risk_interactive(project_ctx).await,
         QualityCommands::ListRisks => list_risks(project_ctx).await,
+        QualityCommands::EditRisk => edit_risk_interactive(project_ctx).await,
         QualityCommands::AssessRisks => assess_risks(project_ctx).await,
         QualityCommands::TraceabilityMatrix => run_traceability_matrix(project_ctx).await,
         QualityCommands::RiskScoring => run_risk_scoring(project_ctx).await,
@@ -62,28 +67,12 @@ async fn add_requirement_interactive(project_ctx: ProjectContext) -> Result<()> 
         _ => Priority::Medium,
     };
     
-    let mut requirement = Requirement::new(name, description, category);
-    requirement.priority = priority;
-    
-    let add_criteria = Confirm::new("Add acceptance criteria?")
-        .with_default(false)
+    let source = Text::new("Source:")
+        .with_help_message("Source of requirement (customer, regulation, standard, etc.)")
         .prompt()?;
-    
-    if add_criteria {
-        let mut criteria = Vec::new();
-        loop {
-            let criterion = Text::new("Acceptance criterion:")
-                .with_help_message("Enter acceptance criterion (empty to finish)")
-                .prompt()?;
-            
-            if criterion.is_empty() {
-                break;
-            }
-            
-            criteria.push(criterion);
-        }
-        requirement.acceptance_criteria = criteria;
-    }
+
+    let mut requirement = Requirement::new(name, description, source, category);
+    requirement.priority = priority;
     
     let quality_dir = project_ctx.module_path("quality");
     let mut repo = QualityRepository::load_from_directory(&quality_dir)?;
@@ -151,6 +140,17 @@ async fn list_requirements(project_ctx: ProjectContext) -> Result<()> {
 async fn add_input_interactive(project_ctx: ProjectContext) -> Result<()> {
     println!("{}", "Adding new design input".bold().blue());
     
+    // First, load requirements to ensure we have some to link to
+    let quality_dir = project_ctx.module_path("quality");
+    let repo = QualityRepository::load_from_directory(&quality_dir)?;
+    let requirements = repo.get_requirements();
+    
+    if requirements.is_empty() {
+        println!("{}", "No requirements found. You must create requirements before adding design inputs.".yellow());
+        println!("Design inputs implement specific requirements - this ensures traceability.");
+        return Ok(());
+    }
+    
     let name = Text::new("Input name:")
         .prompt()?;
     
@@ -159,7 +159,7 @@ async fn add_input_interactive(project_ctx: ProjectContext) -> Result<()> {
     
     let input_types = vec![
         "Specification",
-        "Standard",
+        "Standard", 
         "Regulation",
         "Customer Requirement",
         "Market Research",
@@ -169,72 +169,65 @@ async fn add_input_interactive(project_ctx: ProjectContext) -> Result<()> {
     
     let input_type = Select::new("Input type:", input_types).prompt()?.to_string();
     
-    let source = Text::new("Source:")
-        .with_help_message("Document reference, URL, or source identifier")
+    // Automatically prompt to select requirement - this is the new workflow
+    println!("\n{}", "Select the requirement this design input implements:".bold().blue());
+    let req_options: Vec<String> = requirements.iter()
+        .map(|r| format!("{} - {} ({})", r.name, truncate_string(&r.description, 40), r.source))
+        .collect();
+    
+    let req_selection = Select::new("Requirement:", req_options.clone()).prompt()?;
+    let req_index = req_options.iter().position(|x| x == &req_selection).unwrap();
+    let selected_requirement = &requirements[req_index];
+    let requirement_id = selected_requirement.id;
+    
+    // Get acceptance criteria for this design input
+    let add_criteria = Confirm::new("Add acceptance criteria for this design input?")
+        .with_default(true)
         .prompt()?;
     
-    let input = DesignInput::new(name, description, input_type, source);
+    let mut acceptance_criteria = Vec::new();
+    if add_criteria {
+        loop {
+            let criterion = Text::new("Acceptance criterion:")
+                .with_help_message("Enter criterion (empty to finish)")
+                .prompt()?;
+            
+            if criterion.is_empty() {
+                break;
+            }
+            
+            acceptance_criteria.push(criterion);
+        }
+    }
     
-    let quality_dir = project_ctx.module_path("quality");
+    let mut input = DesignInput::new(name, description, input_type, requirement_id);
+    input.acceptance_criteria = acceptance_criteria;
+    
     let mut repo = QualityRepository::load_from_directory(&quality_dir)?;
     repo.add_input(input.clone())?;
     repo.save_to_directory(&quality_dir)?;
     
     println!("{} Design input '{}' added successfully!", "✓".green(), input.name);
     println!("ID: {}", input.id);
+    println!("Implements requirement: {}", selected_requirement.name);
     
     Ok(())
 }
 
-async fn link_input_to_requirement_interactive(project_ctx: ProjectContext) -> Result<()> {
-    println!("{}", "Linking input to requirement".bold().blue());
-    
-    let quality_dir = project_ctx.module_path("quality");
-    let mut repo = QualityRepository::load_from_directory(&quality_dir)?;
-    
-    let inputs = repo.get_inputs();
-    if inputs.is_empty() {
-        println!("{}", "No inputs found. Add inputs first.".yellow());
-        return Ok(());
-    }
-    
-    let requirements = repo.get_requirements();
-    if requirements.is_empty() {
-        println!("{}", "No requirements found. Add requirements first.".yellow());
-        return Ok(());
-    }
-    
-    let input_options: Vec<String> = inputs.iter()
-        .map(|i| format!("{} - {}", i.name, truncate_string(&i.description, 50)))
-        .collect();
-    
-    let input_selection = Select::new("Select input:", input_options.clone()).prompt()?;
-    let input_index = input_options.iter().position(|x| x == &input_selection).unwrap();
-    let selected_input = &inputs[input_index];
-    let input_id = selected_input.id;
-    let input_name = selected_input.name.clone();
-    
-    let req_options: Vec<String> = requirements.iter()
-        .map(|r| format!("{} - {}", r.name, truncate_string(&r.description, 50)))
-        .collect();
-    
-    let req_selection = Select::new("Select requirement:", req_options.clone()).prompt()?;
-    let req_index = req_options.iter().position(|x| x == &req_selection).unwrap();
-    let selected_requirement = &requirements[req_index];
-    let req_id = selected_requirement.id;
-    let req_name = selected_requirement.name.clone();
-    
-    repo.link_input_to_requirement(input_id, req_id)?;
-    repo.save_to_directory(&quality_dir)?;
-    
-    println!("{} Linked input '{}' to requirement '{}'", 
-             "✓".green(), input_name, req_name);
-    
-    Ok(())
-}
 
 async fn add_output_interactive(project_ctx: ProjectContext) -> Result<()> {
     println!("{}", "Adding new design output".bold().blue());
+    
+    // First, load design inputs to ensure we have some to link to
+    let quality_dir = project_ctx.module_path("quality");
+    let repo = QualityRepository::load_from_directory(&quality_dir)?;
+    let inputs = repo.get_inputs();
+    
+    if inputs.is_empty() {
+        println!("{}", "No design inputs found. You must create design inputs before adding design outputs.".yellow());
+        println!("Design outputs satisfy specific design inputs - this ensures traceability.");
+        return Ok(());
+    }
     
     let name = Text::new("Output name:")
         .prompt()?;
@@ -244,7 +237,7 @@ async fn add_output_interactive(project_ctx: ProjectContext) -> Result<()> {
     
     let output_types = vec![
         "Drawing",
-        "Calculation",
+        "Calculation", 
         "Specification",
         "Report",
         "Model",
@@ -255,21 +248,51 @@ async fn add_output_interactive(project_ctx: ProjectContext) -> Result<()> {
     
     let output_type = Select::new("Output type:", output_types).prompt()?.to_string();
     
-    let output = DesignOutput::new(name, description, output_type);
+    // Automatically prompt to select design input - this is the new workflow
+    println!("\n{}", "Select the design input this output satisfies:".bold().blue());
+    let input_options: Vec<String> = inputs.iter()
+        .map(|i| format!("{} - {} ({})", i.name, truncate_string(&i.description, 40), i.input_type))
+        .collect();
     
-    let quality_dir = project_ctx.module_path("quality");
+    let input_selection = Select::new("Design Input:", input_options.clone()).prompt()?;
+    let input_index = input_options.iter().position(|x| x == &input_selection).unwrap();
+    let selected_input = &inputs[input_index];
+    let input_id = selected_input.id;
+    
+    // Optional file path for the output
+    let file_path = Text::new("File path (optional):")
+        .with_help_message("Path to the actual design output file")
+        .prompt()
+        .ok()
+        .filter(|s| !s.is_empty());
+    
+    let mut output = DesignOutput::new(name, description, output_type, input_id);
+    output.file_path = file_path;
+    
     let mut repo = QualityRepository::load_from_directory(&quality_dir)?;
     repo.add_output(output.clone())?;
     repo.save_to_directory(&quality_dir)?;
     
     println!("{} Design output '{}' added successfully!", "✓".green(), output.name);
     println!("ID: {}", output.id);
+    println!("Satisfies design input: {}", selected_input.name);
     
     Ok(())
 }
 
 async fn add_verification_interactive(project_ctx: ProjectContext) -> Result<()> {
     println!("{}", "Adding new verification".bold().blue());
+    
+    // First, load design outputs to ensure we have some to link to
+    let quality_dir = project_ctx.module_path("quality");
+    let repo = QualityRepository::load_from_directory(&quality_dir)?;
+    let outputs = repo.get_outputs();
+    
+    if outputs.is_empty() {
+        println!("{}", "No design outputs found. You must create design outputs before adding verifications.".yellow());
+        println!("Verifications validate specific design outputs - this ensures traceability.");
+        return Ok(());
+    }
     
     let name = Text::new("Verification name:")
         .prompt()?;
@@ -279,7 +302,7 @@ async fn add_verification_interactive(project_ctx: ProjectContext) -> Result<()>
     
     let verification_types = vec![
         "Review",
-        "Inspection",
+        "Inspection", 
         "Test",
         "Verification",
         "Validation",
@@ -289,15 +312,37 @@ async fn add_verification_interactive(project_ctx: ProjectContext) -> Result<()>
     
     let verification_type = Select::new("Verification type:", verification_types).prompt()?.to_string();
     
-    let verification = Verification::new(name, description, verification_type);
+    // Automatically prompt to select design output - this is the new workflow
+    println!("\n{}", "Select the design output this verification validates:".bold().blue());
+    let output_options: Vec<String> = outputs.iter()
+        .map(|o| format!("{} - {} ({})", o.name, truncate_string(&o.description, 40), o.output_type))
+        .collect();
     
-    let quality_dir = project_ctx.module_path("quality");
+    let output_selection = Select::new("Design Output:", output_options.clone()).prompt()?;
+    let output_index = output_options.iter().position(|x| x == &output_selection).unwrap();
+    let selected_output = &outputs[output_index];
+    let output_id = selected_output.id;
+    
+    // Additional verification details
+    let procedure = Text::new("Verification procedure:")
+        .with_help_message("How will this verification be performed?")
+        .prompt()?;
+    
+    let responsible_party = Text::new("Responsible party:")
+        .with_help_message("Who is responsible for performing this verification?")
+        .prompt()?;
+    
+    let mut verification = Verification::new(name, description, verification_type, output_id);
+    verification.procedure = procedure;
+    verification.responsible_party = responsible_party;
+    
     let mut repo = QualityRepository::load_from_directory(&quality_dir)?;
     repo.add_verification(verification.clone())?;
     repo.save_to_directory(&quality_dir)?;
     
     println!("{} Verification '{}' added successfully!", "✓".green(), verification.name);
     println!("ID: {}", verification.id);
+    println!("Validates design output: {}", selected_output.name);
     
     Ok(())
 }
@@ -325,20 +370,28 @@ async fn add_risk_interactive(project_ctx: ProjectContext) -> Result<()> {
     
     let category = Select::new("Risk category:", risk_categories).prompt()?.to_string();
     
-    let probability_str = Text::new("Probability (0.0 - 1.0):")
-        .with_default("0.5")
-        .prompt()?;
-    let probability: f64 = probability_str.parse().unwrap_or(0.5);
+    // Get risk scoring configuration from project
+    let prob_config = &project_ctx.metadata.quality_settings.risk_probability_range;
+    let impact_config = &project_ctx.metadata.quality_settings.risk_impact_range;
+    let risk_thresholds = &project_ctx.metadata.quality_settings.risk_tolerance_thresholds;
     
-    let impact_str = Text::new("Impact (0.0 - 1.0):")
-        .with_default("0.5")
+    let prob_values = prob_config.values();
+    let impact_values = impact_config.values();
+    
+    let probability_str = Text::new(&format!("Probability [values available: {:?}]:", prob_values))
+        .with_default(&prob_values[0].to_string())
         .prompt()?;
-    let impact: f64 = impact_str.parse().unwrap_or(0.5);
+    let probability: i32 = probability_str.parse().unwrap_or(prob_values[0]);
+    
+    let impact_str = Text::new(&format!("Impact [values available: {:?}]:", impact_values))
+        .with_default(&impact_values[0].to_string())
+        .prompt()?;
+    let impact: i32 = impact_str.parse().unwrap_or(impact_values[0]);
     
     let mut risk = Risk::new(name, description, category);
-    risk.probability = probability.clamp(0.0, 1.0);
-    risk.impact = impact.clamp(0.0, 1.0);
-    risk.update_risk_score();
+    risk.probability = probability;
+    risk.impact = impact;
+    let risk_category = risk.update_risk_score_with_category(prob_config, impact_config, risk_thresholds);
     
     let quality_dir = project_ctx.module_path("quality");
     let mut repo = QualityRepository::load_from_directory(&quality_dir)?;
@@ -347,7 +400,7 @@ async fn add_risk_interactive(project_ctx: ProjectContext) -> Result<()> {
     
     println!("{} Risk '{}' added successfully!", "✓".green(), risk.name);
     println!("ID: {}", risk.id);
-    println!("Risk Score: {:.2}", risk.risk_score);
+    println!("Risk Score: {:.3} ({})", risk.risk_score, risk_category);
     
     Ok(())
 }
@@ -475,7 +528,7 @@ async fn list_inputs(project_ctx: ProjectContext) -> Result<()> {
     println!("{}", "Design Inputs".bold().blue());
     
     let mut table = Table::new();
-    table.set_header(vec!["ID", "Name", "Type", "Source", "Requirements"]);
+    table.set_header(vec!["ID", "Name", "Type", "Requirement ID"]);
     
     for input in inputs {
         let input_type = &input.input_type;
@@ -484,8 +537,7 @@ async fn list_inputs(project_ctx: ProjectContext) -> Result<()> {
             input.id.to_string(),
             truncate_string(&input.name, 25),
             input_type.to_string(),
-            truncate_string(&input.source, 20),
-            input.requirements.len().to_string(),
+            input.requirement_id.to_string(),
         ]);
     }
     
@@ -513,7 +565,7 @@ async fn list_outputs(project_ctx: ProjectContext) -> Result<()> {
     println!("{}", "Design Outputs".bold().blue());
     
     let mut table = Table::new();
-    table.set_header(vec!["ID", "Name", "Type", "Requirements", "Inputs"]);
+    table.set_header(vec!["ID", "Name", "Type", "Input ID"]);
     
     for output in outputs {
         let output_type = &output.output_type;
@@ -522,8 +574,7 @@ async fn list_outputs(project_ctx: ProjectContext) -> Result<()> {
             output.id.to_string(),
             truncate_string(&output.name, 25),
             output_type.to_string(),
-            "0".to_string(), // Requirements field removed in simplified model
-            output.linked_inputs.len().to_string(),
+            output.input_id.to_string(),
         ]);
     }
     
@@ -551,7 +602,7 @@ async fn list_verifications(project_ctx: ProjectContext) -> Result<()> {
     println!("{}", "Verifications".bold().blue());
     
     let mut table = Table::new();
-    table.set_header(vec!["ID", "Name", "Type", "Status", "Outputs"]);
+    table.set_header(vec!["ID", "Name", "Type", "Status", "Output ID"]);
     
     for verification in verifications {
         table.add_row(vec![
@@ -559,7 +610,7 @@ async fn list_verifications(project_ctx: ProjectContext) -> Result<()> {
             truncate_string(&verification.name, 25),
             truncate_string(&verification.verification_type, 15),
             format!("{:?}", verification.status),
-            verification.linked_outputs.len().to_string(),
+            verification.output_id.to_string(),
         ]);
     }
     
@@ -587,26 +638,36 @@ async fn list_risks(project_ctx: ProjectContext) -> Result<()> {
     println!("{}", "Risks".bold().blue());
     
     let mut table = Table::new();
-    table.set_header(vec!["ID", "Name", "Category", "Probability", "Impact", "Risk Score"]);
+    table.set_header(vec!["ID", "Name", "Category", "Probability", "Impact", "Risk Score", "Risk Level"]);
+    
+    let risk_thresholds = &project_ctx.metadata.quality_settings.risk_tolerance_thresholds;
     
     for risk in risks {
         let category = &risk.category;
+        let risk_level = risk_thresholds.categorize_risk(risk.risk_score);
         
-        let risk_score_color = if risk.risk_score >= 0.7 {
-            format!("{:.2}", risk.risk_score).red()
-        } else if risk.risk_score >= 0.3 {
-            format!("{:.2}", risk.risk_score).yellow()
-        } else {
-            format!("{:.2}", risk.risk_score).green()
+        let risk_score_color = match risk_level {
+            tessera_core::RiskCategory::BroadlyAcceptable => format!("{:.3}", risk.risk_score).green(),
+            tessera_core::RiskCategory::TolerableWithReduction => format!("{:.3}", risk.risk_score).blue(),
+            tessera_core::RiskCategory::AsFarAsPracticable => format!("{:.3}", risk.risk_score).yellow(),
+            tessera_core::RiskCategory::Intolerable => format!("{:.3}", risk.risk_score).red(),
+        };
+        
+        let risk_level_display = match risk_level {
+            tessera_core::RiskCategory::BroadlyAcceptable => "BAR".green(),
+            tessera_core::RiskCategory::TolerableWithReduction => "TOLERABLE".blue(),
+            tessera_core::RiskCategory::AsFarAsPracticable => "AFAP".yellow(),
+            tessera_core::RiskCategory::Intolerable => "INT".red(),
         };
         
         table.add_row(vec![
             risk.id.to_string(),
             truncate_string(&risk.name, 25),
             category.to_string(),
-            format!("{:.2}", risk.probability),
-            format!("{:.2}", risk.impact),
+            risk.probability.to_string(),
+            risk.impact.to_string(),
             risk_score_color.to_string(),
+            risk_level_display.to_string(),
         ]);
     }
     
@@ -614,102 +675,6 @@ async fn list_risks(project_ctx: ProjectContext) -> Result<()> {
     Ok(())
 }
 
-// Function removed - direct output-to-requirement linking eliminated in simplified model
-// The traceability flow is now: Requirement → Input → Output → Verification
-
-async fn link_output_to_input_interactive(project_ctx: ProjectContext) -> Result<()> {
-    println!("{}", "Linking output to input".bold().blue());
-    
-    let quality_dir = project_ctx.module_path("quality");
-    let mut repo = QualityRepository::load_from_directory(&quality_dir)?;
-    
-    let outputs = repo.get_outputs();
-    if outputs.is_empty() {
-        println!("{}", "No outputs found. Add outputs first.".yellow());
-        return Ok(());
-    }
-    
-    let inputs = repo.get_inputs();
-    if inputs.is_empty() {
-        println!("{}", "No inputs found. Add inputs first.".yellow());
-        return Ok(());
-    }
-    
-    let output_options: Vec<String> = outputs.iter()
-        .map(|o| format!("{} - {}", o.name, truncate_string(&o.description, 50)))
-        .collect();
-    
-    let output_selection = Select::new("Select output:", output_options.clone()).prompt()?;
-    let output_index = output_options.iter().position(|x| x == &output_selection).unwrap();
-    let selected_output = &outputs[output_index];
-    let output_id = selected_output.id;
-    let output_name = selected_output.name.clone();
-    
-    let input_options: Vec<String> = inputs.iter()
-        .map(|i| format!("{} - {}", i.name, truncate_string(&i.description, 50)))
-        .collect();
-    
-    let input_selection = Select::new("Select input:", input_options.clone()).prompt()?;
-    let input_index = input_options.iter().position(|x| x == &input_selection).unwrap();
-    let selected_input = &inputs[input_index];
-    let input_id = selected_input.id;
-    let input_name = selected_input.name.clone();
-    
-    repo.link_output_to_input(output_id, input_id)?;
-    repo.save_to_directory(&quality_dir)?;
-    
-    println!("{} Linked output '{}' to input '{}'", 
-             "✓".green(), output_name, input_name);
-    
-    Ok(())
-}
-
-async fn link_verification_to_output_interactive(project_ctx: ProjectContext) -> Result<()> {
-    println!("{}", "Linking verification to output".bold().blue());
-    
-    let quality_dir = project_ctx.module_path("quality");
-    let mut repo = QualityRepository::load_from_directory(&quality_dir)?;
-    
-    let verifications = repo.get_verifications();
-    if verifications.is_empty() {
-        println!("{}", "No verifications found. Add verifications first.".yellow());
-        return Ok(());
-    }
-    
-    let outputs = repo.get_outputs();
-    if outputs.is_empty() {
-        println!("{}", "No outputs found. Add outputs first.".yellow());
-        return Ok(());
-    }
-    
-    let verification_options: Vec<String> = verifications.iter()
-        .map(|v| format!("{} - {}", v.name, truncate_string(&v.description, 50)))
-        .collect();
-    
-    let verification_selection = Select::new("Select verification:", verification_options.clone()).prompt()?;
-    let verification_index = verification_options.iter().position(|x| x == &verification_selection).unwrap();
-    let selected_verification = &verifications[verification_index];
-    let verification_id = selected_verification.id;
-    let verification_name = selected_verification.name.clone();
-    
-    let output_options: Vec<String> = outputs.iter()
-        .map(|o| format!("{} - {}", o.name, truncate_string(&o.description, 50)))
-        .collect();
-    
-    let output_selection = Select::new("Select output:", output_options.clone()).prompt()?;
-    let output_index = output_options.iter().position(|x| x == &output_selection).unwrap();
-    let selected_output = &outputs[output_index];
-    let output_id = selected_output.id;
-    let output_name = selected_output.name.clone();
-    
-    repo.link_verification_to_output(verification_id, output_id)?;
-    repo.save_to_directory(&quality_dir)?;
-    
-    println!("{} Linked verification '{}' to output '{}'", 
-             "✓".green(), verification_name, output_name);
-    
-    Ok(())
-}
 
 async fn run_traceability_matrix(project_ctx: ProjectContext) -> Result<()> {
     let quality_dir = project_ctx.module_path("quality");
@@ -726,5 +691,208 @@ async fn run_risk_scoring(project_ctx: ProjectContext) -> Result<()> {
     let mut menu = ScoringMenu::new();
     menu.run(&repo)?;
     
+    Ok(())
+}
+
+async fn add_control_interactive(project_ctx: ProjectContext) -> Result<()> {
+    println!("{}", "Adding new design control".bold().blue());
+    
+    // First, load risks to ensure we have some to link to
+    let quality_dir = project_ctx.module_path("quality");
+    let repo = QualityRepository::load_from_directory(&quality_dir)?;
+    let risks = repo.get_risks();
+    
+    if risks.is_empty() {
+        println!("{}", "No risks found. You must create risks before adding design controls.".yellow());
+        println!("Design controls are used to mitigate or control specific risks.");
+        return Ok(());
+    }
+    
+    let name = Text::new("Control name:")
+        .prompt()?;
+    
+    let description = Text::new("Description:")
+        .prompt()?;
+    
+    let control_types = vec![
+        "Administrative",
+        "Engineering",
+        "Physical",
+        "Procedural",
+        "Technical",
+        "Training",
+        "Other",
+    ];
+    
+    let control_type = Select::new("Control type:", control_types).prompt()?.to_string();
+    
+    // Automatically prompt to select risk - this ensures controls are linked to risks
+    println!("\n{}", "Select the risk this control mitigates:".bold().blue());
+    let risk_options: Vec<String> = risks.iter()
+        .map(|r| format!("{} - {} (Score: {:.3})", r.name, truncate_string(&r.description, 40), r.risk_score))
+        .collect();
+    
+    let risk_selection = Select::new("Risk:", risk_options.clone()).prompt()?;
+    let risk_index = risk_options.iter().position(|x| x == &risk_selection).unwrap();
+    let selected_risk = &risks[risk_index];
+    let risk_id = selected_risk.id;
+    
+    // Additional control details
+    let implementation = Text::new("Implementation details:")
+        .with_help_message("How will this control be implemented?")
+        .prompt()?;
+    
+    let mut control = DesignControl::new(name, description, control_type, risk_id);
+    control.implementation = implementation;
+    
+    let mut repo = QualityRepository::load_from_directory(&quality_dir)?;
+    repo.add_control(control.clone())?;
+    repo.save_to_directory(&quality_dir)?;
+    
+    println!("{} Design control '{}' added successfully!", "✓".green(), control.name);
+    println!("ID: {}", control.id);
+    println!("Mitigates risk: {}", selected_risk.name);
+    
+    Ok(())
+}
+
+async fn list_controls(project_ctx: ProjectContext) -> Result<()> {
+    let quality_dir = project_ctx.module_path("quality");
+    let repo = match QualityRepository::load_from_directory(&quality_dir) {
+        Ok(repo) => repo,
+        Err(_) => {
+            // Try migration if loading fails
+            tessera_quality::migrate_quality_data(&quality_dir)?;
+            QualityRepository::load_from_directory(&quality_dir)?
+        }
+    };
+    let controls = repo.get_controls();
+    
+    if controls.is_empty() {
+        println!("{}", "No design controls found".yellow());
+        return Ok(());
+    }
+    
+    println!("{}", "Design Controls".bold().blue());
+    
+    let mut table = Table::new();
+    table.set_header(vec!["ID", "Name", "Type", "Risk ID", "Implementation"]);
+    
+    for control in controls {
+        table.add_row(vec![
+            control.id.to_string(),
+            truncate_string(&control.name, 25),
+            control.control_type.to_string(),
+            control.risk_id.to_string(),
+            truncate_string(&control.implementation, 30),
+        ]);
+    }
+    
+    println!("{}", table);
+    Ok(())
+}
+async fn edit_requirement_interactive(project_ctx: ProjectContext) -> Result<()> {
+    println!("{}", "Editing requirement".bold().blue());
+    
+    let quality_dir = project_ctx.module_path("quality");
+    let repo = QualityRepository::load_from_directory(&quality_dir)?;
+    let requirements = repo.get_requirements();
+    
+    if requirements.is_empty() {
+        println!("{}", "No requirements found to edit".yellow());
+        return Ok(());
+    }
+    
+    // Select requirement to edit
+    let req_options: Vec<String> = requirements.iter()
+        .map(|r| format!("{} - {} ({})", r.name, truncate_string(&r.description, 40), r.source))
+        .collect();
+    
+    let req_selection = Select::new("Select requirement to edit:", req_options.clone()).prompt()?;
+    let req_index = req_options.iter().position(|x| x == &req_selection).unwrap();
+    let mut requirement = requirements[req_index].clone();
+    
+    // Edit fields
+    let new_name = Text::new("Name:")
+        .with_default(&requirement.name)
+        .prompt()?;
+    
+    let new_description = Text::new("Description:")
+        .with_default(&requirement.description)
+        .prompt()?;
+    
+    let new_source = Text::new("Source:")
+        .with_default(&requirement.source)
+        .prompt()?;
+    
+    let categories = vec![
+        "Functional", "Performance", "Safety", "Regulatory",
+        "Usability", "Reliability", "Maintainability", "Environmental", "Other",
+    ];
+    
+    let category_index = categories.iter().position(|&c| c == requirement.category).unwrap_or(0);
+    let new_category = Select::new("Category:", categories)
+        .with_starting_cursor(category_index)
+        .prompt()?.to_string();
+    
+    let priority_names = vec!["Critical", "High", "Medium", "Low"];
+    let current_priority_index = match requirement.priority {
+        Priority::Critical => 0,
+        Priority::High => 1,
+        Priority::Medium => 2,
+        Priority::Low => 3,
+    };
+    
+    let priority_str = Select::new("Priority:", priority_names)
+        .with_starting_cursor(current_priority_index)
+        .prompt()?;
+    let new_priority = match priority_str {
+        "Critical" => Priority::Critical,
+        "High" => Priority::High,
+        "Medium" => Priority::Medium,
+        "Low" => Priority::Low,
+        _ => Priority::Medium,
+    };
+    
+    // Update requirement
+    requirement.name = new_name;
+    requirement.description = new_description;
+    requirement.source = new_source;
+    requirement.category = new_category;
+    requirement.priority = new_priority;
+    requirement.update_timestamp();
+    
+    let mut repo = QualityRepository::load_from_directory(&quality_dir)?;
+    repo.update_requirement(requirement.clone())?;
+    repo.save_to_directory(&quality_dir)?;
+    
+    println!("{} Requirement '{}' updated successfully!", "✓".green(), requirement.name);
+    
+    Ok(())
+}
+
+// Placeholder edit functions
+async fn edit_input_interactive(_project_ctx: ProjectContext) -> Result<()> {
+    println!("{}", "Edit functionality for design inputs coming soon...".yellow());
+    Ok(())
+}
+
+async fn edit_output_interactive(_project_ctx: ProjectContext) -> Result<()> {
+    println!("{}", "Edit functionality for design outputs coming soon...".yellow());
+    Ok(())
+}
+
+async fn edit_verification_interactive(_project_ctx: ProjectContext) -> Result<()> {
+    println!("{}", "Edit functionality for verifications coming soon...".yellow());
+    Ok(())
+}
+
+async fn edit_control_interactive(_project_ctx: ProjectContext) -> Result<()> {
+    println!("{}", "Edit functionality for design controls coming soon...".yellow());
+    Ok(())
+}
+
+async fn edit_risk_interactive(_project_ctx: ProjectContext) -> Result<()> {
+    println!("{}", "Edit functionality for risks coming soon...".yellow());
     Ok(())
 }

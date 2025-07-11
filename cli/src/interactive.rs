@@ -78,7 +78,6 @@ async fn run_quality_interactive(project_ctx: ProjectContext) -> Result<()> {
         
         let options = vec![
             "📋 Manage Entities",
-            "🔗 Link Entities", 
             "📊 Analysis Tools",
             "📈 Dashboard",
             "← Back to Main Menu",
@@ -91,9 +90,6 @@ async fn run_quality_interactive(project_ctx: ProjectContext) -> Result<()> {
         let result = match selection {
             "📋 Manage Entities" => {
                 run_quality_manage_menu(project_ctx.clone()).await
-            },
-            "🔗 Link Entities" => {
-                run_quality_link_menu(project_ctx.clone()).await
             },
             "📊 Analysis Tools" => {
                 run_quality_analysis_menu(project_ctx.clone()).await
@@ -123,7 +119,8 @@ async fn run_quality_manage_menu(project_ctx: ProjectContext) -> Result<()> {
             "📝 Requirements",
             "📥 Design Inputs",
             "📤 Design Outputs", 
-            "🎯 Design Controls",
+            "✅ Verifications",
+            "🛡️  Design Controls",
             "⚠️  Risks",
             "← Back",
         ];
@@ -137,30 +134,42 @@ async fn run_quality_manage_menu(project_ctx: ProjectContext) -> Result<()> {
                 run_entity_actions_menu("Requirements", &[
                     ("Add Requirement", QualityCommands::AddRequirement),
                     ("List Requirements", QualityCommands::ListRequirements),
+                    ("Edit Requirement", QualityCommands::EditRequirement),
                 ], project_ctx.clone()).await
             },
             "📥 Design Inputs" => {
                 run_entity_actions_menu("Design Inputs", &[
                     ("Add Design Input", QualityCommands::AddInput),
                     ("List Design Inputs", QualityCommands::ListInputs),
+                    ("Edit Design Input", QualityCommands::EditInput),
                 ], project_ctx.clone()).await
             },
             "📤 Design Outputs" => {
                 run_entity_actions_menu("Design Outputs", &[
                     ("Add Design Output", QualityCommands::AddOutput),
                     ("List Design Outputs", QualityCommands::ListOutputs),
+                    ("Edit Design Output", QualityCommands::EditOutput),
                 ], project_ctx.clone()).await
             },
-            "🎯 Design Controls" => {
+            "✅ Verifications" => {
                 run_entity_actions_menu("Verifications", &[
                     ("Add Verification", QualityCommands::AddVerification),
                     ("List Verifications", QualityCommands::ListVerifications),
+                    ("Edit Verification", QualityCommands::EditVerification),
+                ], project_ctx.clone()).await
+            },
+            "🛡️  Design Controls" => {
+                run_entity_actions_menu("Design Controls", &[
+                    ("Add Design Control", QualityCommands::AddControl),
+                    ("List Design Controls", QualityCommands::ListControls),
+                    ("Edit Design Control", QualityCommands::EditControl),
                 ], project_ctx.clone()).await
             },
             "⚠️  Risks" => {
                 run_entity_actions_menu("Risks", &[
                     ("Add Risk", QualityCommands::AddRisk),
                     ("List Risks", QualityCommands::ListRisks),
+                    ("Edit Risk", QualityCommands::EditRisk),
                 ], project_ctx.clone()).await
             },
             "← Back" => {
@@ -201,44 +210,6 @@ async fn run_entity_actions_menu(entity_type: &str, actions: &[(&str, QualityCom
     Ok(())
 }
 
-async fn run_quality_link_menu(project_ctx: ProjectContext) -> Result<()> {
-    loop {
-        println!("\n{}", "Quality Management - Link Entities".bold().blue());
-        
-        let options = vec![
-            "📥➡️📝 Link Input to Requirement",
-            "📤➡️📥 Link Output to Input",
-            "✅➡️📤 Link Verification to Output",
-            "← Back",
-        ];
-        
-        let selection = Select::new("Select linking action:", options)
-            .with_help_message("Choose entities to link")
-            .prompt()?;
-        
-        let result = match selection {
-            "📥➡️📝 Link Input to Requirement" => {
-                execute_quality_command(QualityCommands::LinkInputToRequirement, project_ctx.clone()).await
-            },
-            "📤➡️📥 Link Output to Input" => {
-                execute_quality_command(QualityCommands::LinkOutputToInput, project_ctx.clone()).await
-            },
-            "✅➡️📤 Link Verification to Output" => {
-                execute_quality_command(QualityCommands::LinkVerificationToOutput, project_ctx.clone()).await
-            },
-            "← Back" => {
-                break;
-            },
-            _ => Ok(()),
-        };
-        
-        if let Err(e) = result {
-            println!("{} Error: {}", "✗".red(), e);
-        }
-    }
-    
-    Ok(())
-}
 
 async fn run_quality_analysis_menu(project_ctx: ProjectContext) -> Result<()> {
     loop {
