@@ -1,21 +1,32 @@
 [
     (
-        generated: "2025-07-11T20:49:00.846913994Z",
-        project_start: "2025-07-11T20:49:00.846738993Z",
-        project_end: "2025-07-17T20:49:00.846738993Z",
+        generated: "2025-07-11T22:28:30.313804983Z",
+        project_start: "2025-07-11T22:28:30.313620902Z",
+        project_end: "2025-07-18T12:00:00Z",
         critical_path: [
-            ("fefbdd3c-f3e2-4f11-a423-9f83635615cc"),
+            ("e3343ce0-b14f-4c91-9cd3-e3c5500966aa"),
+            ("4248b2e8-f637-47c5-b560-846e064d35f9"),
         ],
         total_duration_days: 6,
         task_schedule: {
-            ("fefbdd3c-f3e2-4f11-a423-9f83635615cc"): (
-                task_id: ("fefbdd3c-f3e2-4f11-a423-9f83635615cc"),
-                earliest_start: "2025-07-11T20:49:00.846738993Z",
-                latest_start: "2025-07-11T20:49:00.846738993Z",
-                earliest_finish: "2025-07-17T20:49:00.846738993Z",
-                latest_finish: "2025-07-17T20:49:00.846738993Z",
+            ("e3343ce0-b14f-4c91-9cd3-e3c5500966aa"): (
+                task_id: ("e3343ce0-b14f-4c91-9cd3-e3c5500966aa"),
+                earliest_start: "2025-07-11T22:28:30.313620902Z",
+                latest_start: "2025-07-11T22:28:30.313620902Z",
+                earliest_finish: "2025-07-17T22:28:30.313620902Z",
+                latest_finish: "2025-07-17T22:28:30.313620902Z",
                 slack_days: 0,
                 free_float_days: 0,
+                is_critical: true,
+            ),
+        },
+        milestone_schedule: {
+            ("4248b2e8-f637-47c5-b560-846e064d35f9"): (
+                milestone_id: ("4248b2e8-f637-47c5-b560-846e064d35f9"),
+                earliest_date: "2025-07-18T12:00:00Z",
+                latest_date: "2025-07-18T12:00:00Z",
+                target_date: "2025-07-18T12:00:00Z",
+                slack_days: 0,
                 is_critical: true,
             ),
         },

@@ -624,18 +624,33 @@ impl PMEntityEditor {
             .filter(|t| t.id != task.id && !task.dependencies.iter().any(|d| d.predecessor_id == t.id))
             .collect();
 
-        if available_tasks.is_empty() {
-            println!("No tasks available to add as dependencies");
+        let all_milestones = repository.get_milestones();
+        let available_milestones: Vec<_> = all_milestones.iter()
+            .filter(|m| !task.dependencies.iter().any(|d| d.predecessor_id == m.id))
+            .collect();
+
+        if available_tasks.is_empty() && available_milestones.is_empty() {
+            println!("No tasks or milestones available to add as dependencies");
             return Ok(());
         }
 
-        let task_options: Vec<String> = available_tasks.iter()
-            .map(|t| format!("{} - {}", t.name, t.status))
-            .collect();
+        // Create combined options list
+        let mut all_options: Vec<(String, Id)> = Vec::new();
+        
+        // Add tasks
+        for t in &available_tasks {
+            all_options.push((format!("TASK: {} - {}", t.name, t.status), t.id));
+        }
+        
+        // Add milestones  
+        for m in &available_milestones {
+            all_options.push((format!("MILESTONE: {} - {}", m.name, m.target_date.format("%Y-%m-%d")), m.id));
+        }
 
-        let selected = Select::new("Select predecessor task:", task_options.clone()).prompt()?;
-        let selected_index = task_options.iter().position(|x| x == &selected).unwrap();
-        let predecessor = available_tasks[selected_index];
+        let option_labels: Vec<String> = all_options.iter().map(|(label, _)| label.clone()).collect();
+        let selected = Select::new("Select predecessor (task or milestone):", option_labels.clone()).prompt()?;
+        let selected_index = option_labels.iter().position(|x| x == &selected).unwrap();
+        let predecessor_id = all_options[selected_index].1;
 
         // Select dependency type
         let dep_types = vec![
@@ -662,7 +677,7 @@ impl PMEntityEditor {
             .prompt()?;
 
         let dependency = TaskDependency {
-            predecessor_id: predecessor.id,
+            predecessor_id,
             dependency_type,
             lag_days,
             description: None,
@@ -671,8 +686,15 @@ impl PMEntityEditor {
         task.dependencies.push(dependency);
         task.updated = Utc::now();
         
+        // Get name for confirmation message
+        let predecessor_name = repository.find_task_by_id(predecessor_id)
+            .map(|t| t.name.clone())
+            .or_else(|| repository.find_milestone_by_id(predecessor_id)
+                     .map(|m| m.name.clone()))
+            .unwrap_or_else(|| "Unknown".to_string());
+        
         println!("✓ Dependency added: {} -> {} ({})", 
-            predecessor.name, task.name, dependency_type);
+            predecessor_name, task.name, dependency_type);
 
         Ok(())
     }

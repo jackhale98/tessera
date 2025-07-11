@@ -1,15 +1,15 @@
 [
     (
-        id: ("2bcc90a6-c946-46b4-937a-6e2eff3de5a9"),
-        name: "jack",
+        id: ("99ce444c-2771-4e1b-ac46-1a906ba27d61"),
+        name: "Jack",
         email: Some("jhale"),
         role: "engineer",
         hourly_rate: Some(201.0),
         daily_hours: 8.0,
         availability_percentage: 100.0,
         skills: [],
-        created: "2025-07-11T20:30:28.317315787Z",
-        updated: "2025-07-11T20:30:28.317315787Z",
+        created: "2025-07-11T22:26:17.489323662Z",
+        updated: "2025-07-11T22:26:17.489323662Z",
         metadata: {},
     ),
 ]

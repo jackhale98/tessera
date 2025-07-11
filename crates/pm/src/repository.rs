@@ -95,6 +95,17 @@ impl ProjectRepository {
             .filter(|t| !t.is_completed() && t.due_date.map_or(false, |due| due < now))
             .collect()
     }
+
+    pub fn remove_task(&mut self, id: Id) -> Result<()> {
+        if let Some(pos) = self.tasks.iter().position(|t| t.id == id) {
+            self.tasks.remove(pos);
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Task with id {} not found", id)
+            ))
+        }
+    }
     
     // Resource methods
     pub fn add_resource(&mut self, resource: Resource) -> Result<()> {
@@ -119,6 +130,17 @@ impl ProjectRepository {
         } else {
             Err(tessera_core::DesignTrackError::NotFound(
                 format!("Resource with id {} not found", updated.id)
+            ))
+        }
+    }
+
+    pub fn remove_resource(&mut self, id: Id) -> Result<()> {
+        if let Some(pos) = self.resources.iter().position(|r| r.id == id) {
+            self.resources.remove(pos);
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Resource with id {} not found", id)
             ))
         }
     }
@@ -153,6 +175,17 @@ impl ProjectRepository {
     pub fn get_overdue_milestones(&self) -> Vec<&Milestone> {
         self.milestones.iter().filter(|m| m.is_overdue()).collect()
     }
+
+    pub fn remove_milestone(&mut self, id: Id) -> Result<()> {
+        if let Some(pos) = self.milestones.iter().position(|m| m.id == id) {
+            self.milestones.remove(pos);
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Milestone with id {} not found", id)
+            ))
+        }
+    }
     
     // Schedule methods
     pub fn add_schedule(&mut self, schedule: ProjectSchedule) -> Result<()> {
@@ -175,8 +208,12 @@ impl ProjectRepository {
         let overdue_tasks = self.get_overdue_tasks().len();
         let overdue_milestones = self.get_overdue_milestones().len();
         
+        // Calculate weighted completion percentage based on task progress
         let completion_percentage = if total_tasks > 0 {
-            (completed_tasks as f64 / total_tasks as f64) * 100.0
+            let total_progress: f64 = self.tasks.iter()
+                .map(|task| task.progress_percentage)
+                .sum();
+            total_progress / total_tasks as f64
         } else {
             0.0
         };
@@ -189,6 +226,151 @@ impl ProjectRepository {
             completion_percentage,
         }
     }
+
+    /// Calculate project completion percentage based on task effort weighting
+    pub fn get_effort_weighted_completion(&self) -> f64 {
+        if self.tasks.is_empty() {
+            return 0.0;
+        }
+
+        let total_effort: f64 = self.tasks.iter()
+            .map(|task| task.estimated_hours)
+            .sum();
+
+        if total_effort == 0.0 {
+            // Fallback to simple average if no effort estimates
+            return self.tasks.iter()
+                .map(|task| task.progress_percentage)
+                .sum::<f64>() / self.tasks.len() as f64;
+        }
+
+        let weighted_progress: f64 = self.tasks.iter()
+            .map(|task| (task.progress_percentage / 100.0) * task.estimated_hours)
+            .sum();
+
+        (weighted_progress / total_effort) * 100.0
+    }
+
+    /// Calculate total project cost based on resource rates and task assignments
+    pub fn calculate_project_cost(&self) -> ProjectCost {
+        let mut total_estimated_cost = 0.0;
+        let mut total_actual_cost = 0.0;
+        let mut task_costs = Vec::new();
+
+        for task in &self.tasks {
+            let task_cost = self.calculate_task_cost(task);
+            total_estimated_cost += task_cost.estimated_cost;
+            total_actual_cost += task_cost.actual_cost;
+            task_costs.push(task_cost);
+        }
+
+        ProjectCost {
+            total_estimated_cost,
+            total_actual_cost,
+            task_costs,
+            cost_variance: total_actual_cost - total_estimated_cost,
+            cost_variance_percentage: if total_estimated_cost > 0.0 {
+                ((total_actual_cost - total_estimated_cost) / total_estimated_cost) * 100.0
+            } else {
+                0.0
+            },
+        }
+    }
+
+    /// Calculate cost for a specific task
+    pub fn calculate_task_cost(&self, task: &Task) -> TaskCost {
+        let mut estimated_cost = 0.0;
+        let mut actual_cost = 0.0;
+        let mut resource_costs = Vec::new();
+
+        for assignment in &task.assigned_resources {
+            if let Some(resource) = self.find_resource_by_id(assignment.resource_id) {
+                let hourly_rate = assignment.rate_override
+                    .or(resource.hourly_rate)
+                    .unwrap_or(0.0);
+
+                // Calculate estimated hours for this resource based on allocation
+                let estimated_hours = if assignment.assigned_hours.is_some() {
+                    assignment.assigned_hours.unwrap_or(0.0)
+                } else {
+                    match task.task_type {
+                        TaskType::EffortDriven => {
+                            task.estimated_hours * (assignment.allocation_percentage / 100.0)
+                        }
+                        TaskType::FixedDuration => {
+                            if let Some(duration) = task.duration_days {
+                                duration * resource.daily_hours * (assignment.allocation_percentage / 100.0)
+                            } else {
+                                0.0
+                            }
+                        }
+                        TaskType::FixedWork => {
+                            task.work_units.unwrap_or(0.0) * (assignment.allocation_percentage / 100.0)
+                        }
+                        TaskType::Milestone => 0.0,
+                    }
+                };
+
+                // Calculate actual hours based on progress
+                let actual_hours = estimated_hours * (task.progress_percentage / 100.0);
+
+                let resource_estimated_cost = estimated_hours * hourly_rate;
+                let resource_actual_cost = actual_hours * hourly_rate;
+
+                estimated_cost += resource_estimated_cost;
+                actual_cost += resource_actual_cost;
+
+                resource_costs.push(ResourceCost {
+                    resource_id: assignment.resource_id,
+                    resource_name: resource.name.clone(),
+                    hourly_rate,
+                    estimated_hours,
+                    actual_hours,
+                    estimated_cost: resource_estimated_cost,
+                    actual_cost: resource_actual_cost,
+                });
+            }
+        }
+
+        TaskCost {
+            task_id: task.id,
+            task_name: task.name.clone(),
+            estimated_cost,
+            actual_cost,
+            resource_costs,
+            cost_variance: actual_cost - estimated_cost,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ProjectCost {
+    pub total_estimated_cost: f64,
+    pub total_actual_cost: f64,
+    pub task_costs: Vec<TaskCost>,
+    pub cost_variance: f64,
+    pub cost_variance_percentage: f64,
+}
+
+#[derive(Debug, Clone)]
+pub struct TaskCost {
+    pub task_id: Id,
+    pub task_name: String,
+    pub estimated_cost: f64,
+    pub actual_cost: f64,
+    pub resource_costs: Vec<ResourceCost>,
+    pub cost_variance: f64,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResourceCost {
+    pub resource_id: Id,
+    pub resource_name: String,
+    pub hourly_rate: f64,
+    pub estimated_hours: f64,
+    pub actual_hours: f64,
+    pub estimated_cost: f64,
+    pub actual_cost: f64,
 }
 
 #[derive(Debug)]

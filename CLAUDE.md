@@ -91,9 +91,28 @@ cargo run -- quality dashboard
 # Project management commands
 cargo run -- pm task:add
 cargo run -- pm task:list
+cargo run -- pm task:edit
+cargo run -- pm task:delete
+cargo run -- pm task:progress
 cargo run -- pm resource:add
+cargo run -- pm resource:list
+cargo run -- pm resource:edit
+cargo run -- pm resource:delete
 cargo run -- pm milestone:add
-cargo run -- pm schedule
+cargo run -- pm milestone:list
+cargo run -- pm milestone:edit
+cargo run -- pm milestone:delete
+cargo run -- pm schedule:generate
+cargo run -- pm schedule:view
+cargo run -- pm cost:analysis
+cargo run -- pm gantt:generate
+cargo run -- pm risk:add
+cargo run -- pm risk:list
+cargo run -- pm issue:add
+cargo run -- pm issue:list
+cargo run -- pm baseline:create
+cargo run -- pm baseline:compare
+cargo run -- pm calendar:setup
 cargo run -- pm dashboard
 
 # Tolerance analysis commands
@@ -155,9 +174,18 @@ cargo run -- link validate
 - **Integration**: Cross-module integration with requirements and risk modules
 
 ### Project Management (tessera-pm)
-- **Task Management**: Task hierarchy with dependencies, effort tracking, and progress monitoring
-- **Resource Management**: Resource allocation, calendars, and utilization tracking
-- **Scheduling**: Critical path analysis, Gantt chart generation, and schedule optimization
+- **Task Management**: Task hierarchy with complex dependencies (FinishToStart, StartToStart, FinishToFinish, StartToFinish), effort tracking, progress monitoring, and deletion with dependency cleanup
+- **Advanced Scheduling**: Critical path method (CPM) implementation with forward/backward pass, slack calculation, free float analysis, and milestone integration
+- **Resource Management**: Resource allocation with percentage-based assignments, hourly rates, skill tracking, utilization analysis, and deletion with assignment cleanup
+- **Milestone Support**: Full milestone lifecycle management with dependencies, critical path inclusion, and deletion capabilities
+- **Cross-Entity Dependencies**: Tasks and milestones can depend on each other with full relationship type support
+- **Scheduling Engine**: Petgraph-based dependency resolution, topological sorting, circular dependency detection, and milestone date integration
+- **Cost Analysis**: Comprehensive cost estimation based on resource hourly rates, task progress, and effort allocation with variance tracking
+- **Enhanced Displays**: Task listings show dependencies, costs, and progress; critical path shows names and descriptions; schedule includes milestone dates
+- **Gantt Chart Generation**: Visual project timelines with critical path highlighting and resource utilization
+- **Task Types**: Support for effort-driven, fixed-duration, fixed-work, and milestone tasks with flexible resource scaling
+- **Dependency Management**: Enhanced lag/lead time support with multiple relationship types and constraint propagation
+- **Progress Tracking**: Effort-weighted completion percentages and real-time progress updates
 - **Risk Management**: Project-specific risk registry separate from design risks
 - **Issue Tracking**: Issue lifecycle management with SLA definitions and escalation workflows
 - **Baseline Management**: Project baseline snapshots with variance analysis and health indicators
@@ -202,10 +230,10 @@ quality/             # Legacy quality data (deprecated)
   controls.ron
   risks.ron
 pm/
-  tasks.ron          # Project tasks
-  resources.ron      # Resource definitions
-  milestones.ron     # Project milestones
-  schedules.ron      # Schedule snapshots
+  tasks.ron          # Project tasks with dependency relationships
+  resources.ron      # Resource definitions with allocation details
+  milestones.ron     # Project milestones with status tracking
+  schedules.ron      # Generated schedule snapshots with critical path analysis
   pm_risks.ron       # Project management risks
   issues.ron         # Issue tracking
   baselines.ron      # Project baselines

@@ -413,7 +413,8 @@ pub struct Milestone {
     pub target_date: DateTime<Utc>,
     pub actual_date: Option<DateTime<Utc>>,
     pub status: MilestoneStatus,
-    pub dependent_tasks: Vec<Id>, // Tasks that must be completed for this milestone
+    pub dependent_tasks: Vec<Id>, // Tasks that must be completed for this milestone (legacy)
+    pub dependencies: Vec<TaskDependency>, // Dependencies on other tasks or milestones
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
     pub metadata: IndexMap<String, String>,
@@ -457,10 +458,26 @@ impl Milestone {
             actual_date: None,
             status: MilestoneStatus::Pending,
             dependent_tasks: Vec::new(),
+            dependencies: Vec::new(),
             created: now,
             updated: now,
             metadata: IndexMap::new(),
         }
+    }
+
+    /// Add a dependency to this milestone
+    pub fn add_dependency(&mut self, predecessor_id: Id, dependency_type: DependencyType, lag_days: f32) {
+        let dependency = TaskDependency {
+            predecessor_id,
+            dependency_type,
+            lag_days,
+            description: None,
+        };
+        
+        // Remove existing dependency with same predecessor if exists
+        self.dependencies.retain(|dep| dep.predecessor_id != predecessor_id);
+        self.dependencies.push(dependency);
+        self.updated = Utc::now();
     }
     
     pub fn is_overdue(&self) -> bool {
@@ -473,9 +490,10 @@ pub struct ProjectSchedule {
     pub generated: DateTime<Utc>,
     pub project_start: DateTime<Utc>,
     pub project_end: DateTime<Utc>,
-    pub critical_path: Vec<Id>, // Task IDs on critical path
+    pub critical_path: Vec<Id>, // Task and Milestone IDs on critical path
     pub total_duration_days: i64,
     pub task_schedule: IndexMap<Id, TaskScheduleInfo>,
+    pub milestone_schedule: IndexMap<Id, MilestoneScheduleInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -502,6 +520,29 @@ impl TaskScheduleInfo {
             slack_days: 0,
             free_float_days: 0,
             is_critical: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MilestoneScheduleInfo {
+    pub milestone_id: Id,
+    pub earliest_date: DateTime<Utc>,
+    pub latest_date: DateTime<Utc>,
+    pub target_date: DateTime<Utc>,
+    pub slack_days: i64,
+    pub is_critical: bool,
+}
+
+impl MilestoneScheduleInfo {
+    pub fn new(milestone_id: Id, target_date: DateTime<Utc>) -> Self {
+        Self {
+            milestone_id,
+            earliest_date: target_date,
+            latest_date: target_date,
+            target_date,
+            slack_days: 0,
+            is_critical: true,
         }
     }
 }

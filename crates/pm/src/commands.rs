@@ -2,7 +2,7 @@ use crate::data::*;
 use crate::repository::ProjectRepository;
 use crate::scheduling::ProjectScheduler;
 use crate::task_editor::{PMEntityEditor, EditOptions};
-use tessera_core::{ProjectContext, Result};
+use tessera_core::{ProjectContext, Result, Id};
 use inquire::{Select, Text, Confirm, CustomType, DateSelect};
 use inquire::validator::Validation;
 use chrono::{Utc, TimeZone};
@@ -299,6 +299,91 @@ impl ProjectCommands {
         
         Ok(())
     }
+
+    pub async fn delete_task_interactive(&mut self) -> Result<()> {
+        let tasks = self.repository.get_tasks().to_vec();
+        if tasks.is_empty() {
+            println!("No tasks found.");
+            return Ok(());
+        }
+
+        // Create options for task selection
+        let task_options: Vec<String> = tasks.iter()
+            .map(|t| format!("{}: {} ({})", t.id, t.name, t.status))
+            .collect();
+
+        let selected = Select::new("Select task to delete:", task_options)
+            .with_help_message("Use arrow keys to select the task you want to delete")
+            .prompt()?;
+
+        // Extract task ID from selection
+        let task_id = selected.split(':').next()
+            .and_then(|id_str| Id::parse(id_str).ok())
+            .ok_or_else(|| tessera_core::DesignTrackError::Validation("Invalid task selection".to_string()))?;
+
+        let task = tasks.iter()
+            .find(|t| t.id == task_id)
+            .ok_or_else(|| tessera_core::DesignTrackError::NotFound("Task not found".to_string()))?;
+
+        // Check for dependencies
+        let dependent_tasks: Vec<&Task> = tasks.iter()
+            .filter(|t| t.dependencies.iter().any(|dep| dep.predecessor_id == task_id))
+            .collect();
+
+        if !dependent_tasks.is_empty() {
+            println!("\n⚠️  Warning: This task has dependent tasks:");
+            for dep_task in &dependent_tasks {
+                println!("  - {} ({})", dep_task.name, dep_task.id);
+            }
+            println!("Deleting this task will remove these dependencies.");
+        }
+
+        // Confirmation prompt
+        let confirm_message = format!(
+            "Are you sure you want to delete task '{}'?\nThis action cannot be undone.",
+            task.name
+        );
+        
+        let confirmed = Confirm::new(&confirm_message)
+            .with_default(false)
+            .prompt()?;
+
+        if !confirmed {
+            println!("Task deletion cancelled.");
+            return Ok(());
+        }
+
+        let task_name = task.name.clone();
+
+        // Remove the task
+        self.repository.remove_task(task_id)?;
+
+        // Remove dependencies from other tasks that reference this task
+        let mut updated_tasks = Vec::new();
+        for mut other_task in tasks.iter().cloned() {
+            if other_task.id != task_id {
+                let original_dep_count = other_task.dependencies.len();
+                other_task.dependencies.retain(|dep| dep.predecessor_id != task_id);
+                if other_task.dependencies.len() != original_dep_count {
+                    other_task.updated = Utc::now();
+                    updated_tasks.push(other_task);
+                }
+            }
+        }
+
+        // Update tasks that had dependencies removed
+        for updated_task in updated_tasks {
+            self.repository.update_task(updated_task)?;
+        }
+
+        // Save changes
+        let pm_dir = self.project_context.module_path("pm");
+        self.repository.save_to_directory(&pm_dir)?;
+
+        println!("✓ Task '{}' deleted successfully!", task_name);
+        
+        Ok(())
+    }
     
     pub async fn add_resource_interactive(&mut self) -> Result<()> {
         let name = Text::new("Resource name:")
@@ -341,6 +426,90 @@ impl ProjectCommands {
         
         Ok(())
     }
+
+    pub async fn delete_resource_interactive(&mut self) -> Result<()> {
+        let resources = self.repository.get_resources().to_vec();
+        if resources.is_empty() {
+            println!("No resources found.");
+            return Ok(());
+        }
+
+        // Create options for resource selection
+        let resource_options: Vec<String> = resources.iter()
+            .map(|r| format!("{}: {} ({})", r.id, r.name, r.role))
+            .collect();
+
+        let selected = Select::new("Select resource to delete:", resource_options)
+            .with_help_message("Use arrow keys to select the resource you want to delete")
+            .prompt()?;
+
+        // Extract resource ID from selection
+        let resource_id = selected.split(':').next()
+            .and_then(|id_str| Id::parse(id_str).ok())
+            .ok_or_else(|| tessera_core::DesignTrackError::Validation("Invalid resource selection".to_string()))?;
+
+        let resource = resources.iter()
+            .find(|r| r.id == resource_id)
+            .ok_or_else(|| tessera_core::DesignTrackError::NotFound("Resource not found".to_string()))?;
+
+        // Check for tasks assigned to this resource
+        let tasks = self.repository.get_tasks().to_vec();
+        let assigned_tasks: Vec<&Task> = tasks.iter()
+            .filter(|t| t.assigned_resources.iter().any(|res| res.resource_id == resource_id))
+            .collect();
+
+        if !assigned_tasks.is_empty() {
+            println!("\n⚠️  Warning: This resource is assigned to tasks:");
+            for task in &assigned_tasks {
+                println!("  - {} ({})", task.name, task.id);
+            }
+            println!("Deleting this resource will remove these assignments.");
+        }
+
+        // Confirmation prompt
+        let confirm_message = format!(
+            "Are you sure you want to delete resource '{}'?\nThis action cannot be undone.",
+            resource.name
+        );
+        
+        let confirmed = Confirm::new(&confirm_message)
+            .with_default(false)
+            .prompt()?;
+
+        if !confirmed {
+            println!("Resource deletion cancelled.");
+            return Ok(());
+        }
+
+        let resource_name = resource.name.clone();
+
+        // Remove the resource
+        self.repository.remove_resource(resource_id)?;
+
+        // Remove assignments from tasks
+        let mut updated_tasks = Vec::new();
+        for mut task in tasks.iter().cloned() {
+            let original_assignment_count = task.assigned_resources.len();
+            task.assigned_resources.retain(|res| res.resource_id != resource_id);
+            if task.assigned_resources.len() != original_assignment_count {
+                task.updated = Utc::now();
+                updated_tasks.push(task);
+            }
+        }
+
+        // Update tasks that had assignments removed
+        for updated_task in updated_tasks {
+            self.repository.update_task(updated_task)?;
+        }
+
+        // Save changes
+        let pm_dir = self.project_context.module_path("pm");
+        self.repository.save_to_directory(&pm_dir)?;
+
+        println!("✓ Resource '{}' deleted successfully!", resource_name);
+        
+        Ok(())
+    }
     
     pub async fn add_milestone_interactive(&mut self) -> Result<()> {
         let name = Text::new("Milestone name:")
@@ -370,9 +539,94 @@ impl ProjectCommands {
         
         Ok(())
     }
+
+    pub async fn delete_milestone_interactive(&mut self) -> Result<()> {
+        let milestones = self.repository.get_milestones().to_vec();
+        if milestones.is_empty() {
+            println!("No milestones found.");
+            return Ok(());
+        }
+
+        // Create options for milestone selection
+        let milestone_options: Vec<String> = milestones.iter()
+            .map(|m| format!("{}: {} ({})", m.id, m.name, m.target_date.format("%Y-%m-%d")))
+            .collect();
+
+        let selected = Select::new("Select milestone to delete:", milestone_options)
+            .with_help_message("Use arrow keys to select the milestone you want to delete")
+            .prompt()?;
+
+        // Extract milestone ID from selection
+        let milestone_id = selected.split(':').next()
+            .and_then(|id_str| Id::parse(id_str).ok())
+            .ok_or_else(|| tessera_core::DesignTrackError::Validation("Invalid milestone selection".to_string()))?;
+
+        let milestone = milestones.iter()
+            .find(|m| m.id == milestone_id)
+            .ok_or_else(|| tessera_core::DesignTrackError::NotFound("Milestone not found".to_string()))?;
+
+        // Check for tasks dependent on this milestone
+        let tasks = self.repository.get_tasks().to_vec();
+        let dependent_tasks: Vec<&Task> = tasks.iter()
+            .filter(|t| t.dependencies.iter().any(|dep| dep.predecessor_id == milestone_id))
+            .collect();
+
+        if !dependent_tasks.is_empty() {
+            println!("\n⚠️  Warning: This milestone has dependent tasks:");
+            for task in &dependent_tasks {
+                println!("  - {} ({})", task.name, task.id);
+            }
+            println!("Deleting this milestone will remove these dependencies.");
+        }
+
+        // Confirmation prompt
+        let confirm_message = format!(
+            "Are you sure you want to delete milestone '{}'?\nThis action cannot be undone.",
+            milestone.name
+        );
+        
+        let confirmed = Confirm::new(&confirm_message)
+            .with_default(false)
+            .prompt()?;
+
+        if !confirmed {
+            println!("Milestone deletion cancelled.");
+            return Ok(());
+        }
+
+        let milestone_name = milestone.name.clone();
+
+        // Remove the milestone
+        self.repository.remove_milestone(milestone_id)?;
+
+        // Remove dependencies from tasks that reference this milestone
+        let mut updated_tasks = Vec::new();
+        for mut task in tasks.iter().cloned() {
+            let original_dep_count = task.dependencies.len();
+            task.dependencies.retain(|dep| dep.predecessor_id != milestone_id);
+            if task.dependencies.len() != original_dep_count {
+                task.updated = Utc::now();
+                updated_tasks.push(task);
+            }
+        }
+
+        // Update tasks that had dependencies removed
+        for updated_task in updated_tasks {
+            self.repository.update_task(updated_task)?;
+        }
+
+        // Save changes
+        let pm_dir = self.project_context.module_path("pm");
+        self.repository.save_to_directory(&pm_dir)?;
+
+        println!("✓ Milestone '{}' deleted successfully!", milestone_name);
+        
+        Ok(())
+    }
     
     pub fn compute_schedule(&mut self) -> Result<()> {
         let tasks = self.repository.get_tasks();
+        let milestones = self.repository.get_milestones();
         let resources = self.repository.get_resources();
         
         if tasks.is_empty() {
@@ -384,7 +638,7 @@ impl ProjectCommands {
         let project_start = Utc::now();
         
         println!("Computing project schedule...");
-        let schedule = scheduler.compute_schedule(tasks, resources, project_start)?;
+        let schedule = scheduler.compute_schedule(tasks, milestones, resources, project_start)?;
         
         self.repository.add_schedule(schedule.clone())?;
         
@@ -401,7 +655,17 @@ impl ProjectCommands {
         println!("\nCritical Path:");
         for &task_id in &schedule.critical_path {
             if let Some(task) = self.repository.find_task_by_id(task_id) {
-                println!("  - {}", task.name);
+                println!("  - {} ({})", task.name, task.description);
+                if let Some(schedule_info) = schedule.task_schedule.get(&task_id) {
+                    println!("    Duration: {} days, Start: {}, Finish: {}",
+                        (schedule_info.earliest_finish - schedule_info.earliest_start).num_days(),
+                        schedule_info.earliest_start.format("%Y-%m-%d"),
+                        schedule_info.earliest_finish.format("%Y-%m-%d")
+                    );
+                }
+            } else if let Some(milestone) = self.repository.find_milestone_by_id(task_id) {
+                println!("  - {} [MILESTONE] ({})", milestone.name, milestone.description);
+                println!("    Target Date: {}", milestone.target_date.format("%Y-%m-%d"));
             }
         }
         
@@ -417,6 +681,28 @@ impl ProjectCommands {
                          schedule_info.slack_days,
                          schedule_info.free_float_days,
                          critical_marker);
+            }
+        }
+
+        // Show milestone schedule
+        if !schedule.milestone_schedule.is_empty() {
+            println!("\nMilestone Schedule:");
+            for (milestone_id, milestone_info) in &schedule.milestone_schedule {
+                if let Some(milestone) = self.repository.find_milestone_by_id(*milestone_id) {
+                    let critical_marker = if milestone_info.is_critical { " [CRITICAL]" } else { "" };
+                    let status_marker = if milestone_info.earliest_date > milestone_info.target_date {
+                        " [AT RISK]"
+                    } else {
+                        ""
+                    };
+                    println!("  {} - Target: {}, Earliest: {}, Slack: {} days{}{}",
+                             milestone.name,
+                             milestone_info.target_date.format("%Y-%m-%d"),
+                             milestone_info.earliest_date.format("%Y-%m-%d"),
+                             milestone_info.slack_days,
+                             critical_marker,
+                             status_marker);
+                }
             }
         }
         
@@ -452,11 +738,47 @@ impl ProjectCommands {
                      i + 1, status_symbol, priority_symbol, task.name, task.description, task.estimated_hours);
             
             if !task.dependencies.is_empty() {
-                println!("   Dependencies: {} tasks", task.dependencies.len());
+                println!("   Dependencies:");
+                for dep in &task.dependencies {
+                    let dep_type_str = match dep.dependency_type {
+                        DependencyType::FinishToStart => "FS",
+                        DependencyType::StartToStart => "SS", 
+                        DependencyType::FinishToFinish => "FF",
+                        DependencyType::StartToFinish => "SF",
+                    };
+                    
+                    // Try to find the dependency name from tasks and milestones
+                    let dep_name = self.repository.find_task_by_id(dep.predecessor_id)
+                        .map(|t| format!("{} (Task)", t.name))
+                        .or_else(|| self.repository.find_milestone_by_id(dep.predecessor_id)
+                                 .map(|m| format!("{} (Milestone)", m.name)))
+                        .unwrap_or_else(|| format!("Unknown ({})", dep.predecessor_id));
+                    
+                    let lag_str = if dep.lag_days != 0.0 {
+                        if dep.lag_days > 0.0 {
+                            format!(" +{:.1}d lag", dep.lag_days)
+                        } else {
+                            format!(" {:.1}d lead", dep.lag_days)
+                        }
+                    } else {
+                        String::new()
+                    };
+                    
+                    println!("     → {} [{}]{}", dep_name, dep_type_str, lag_str);
+                }
             }
             
             if task.progress_percentage > 0.0 {
                 println!("   Progress: {:.1}%", task.progress_percentage);
+            }
+
+            // Show cost information if resources are assigned
+            if !task.assigned_resources.is_empty() {
+                let task_cost = self.repository.calculate_task_cost(task);
+                if task_cost.estimated_cost > 0.0 {
+                    println!("   Cost: ${:.2} estimated, ${:.2} actual", 
+                             task_cost.estimated_cost, task_cost.actual_cost);
+                }
             }
             
             println!("   ID: {}", task.id);
@@ -474,6 +796,7 @@ impl ProjectCommands {
         println!("Total Tasks: {}", health.total_tasks);
         println!("Completed Tasks: {}", health.completed_tasks);
         println!("Completion: {:.1}%", health.completion_percentage);
+        println!("Effort-Weighted Completion: {:.1}%", self.repository.get_effort_weighted_completion());
         println!("Overdue Tasks: {}", health.overdue_tasks);
         println!("Overdue Milestones: {}", health.overdue_milestones);
         
@@ -482,6 +805,15 @@ impl ProjectCommands {
         
         let milestones = self.repository.get_milestones();
         println!("Milestones: {}", milestones.len());
+
+        // Cost information
+        let project_cost = self.repository.calculate_project_cost();
+        println!("\nCost Analysis:");
+        println!("  Estimated Cost: ${:.2}", project_cost.total_estimated_cost);
+        println!("  Actual Cost: ${:.2}", project_cost.total_actual_cost);
+        println!("  Cost Variance: ${:.2} ({:.1}%)", 
+                 project_cost.cost_variance, 
+                 project_cost.cost_variance_percentage);
         
         if let Some(schedule) = self.repository.get_latest_schedule() {
             println!("\nLatest Schedule:");
@@ -501,6 +833,44 @@ impl ProjectCommands {
         println!("  In Progress: {}", in_progress);
         println!("  Completed: {}", completed);
         println!("  On Hold: {}", on_hold);
+        
+        Ok(())
+    }
+
+    pub fn show_cost_analysis(&self) -> Result<()> {
+        let project_cost = self.repository.calculate_project_cost();
+        
+        println!("Project Cost Analysis");
+        println!("====================");
+        println!("Total Estimated Cost: ${:.2}", project_cost.total_estimated_cost);
+        println!("Total Actual Cost: ${:.2}", project_cost.total_actual_cost);
+        println!("Cost Variance: ${:.2} ({:.1}%)", 
+                 project_cost.cost_variance, 
+                 project_cost.cost_variance_percentage);
+        
+        println!("\nTask Cost Breakdown:");
+        println!("-------------------");
+        
+        for task_cost in &project_cost.task_costs {
+            if task_cost.estimated_cost > 0.0 || task_cost.actual_cost > 0.0 {
+                println!("Task: {} ({})", task_cost.task_name, task_cost.task_id);
+                println!("  Estimated: ${:.2}", task_cost.estimated_cost);
+                println!("  Actual: ${:.2}", task_cost.actual_cost);
+                println!("  Variance: ${:.2}", task_cost.cost_variance);
+                
+                println!("  Resource Breakdown:");
+                for resource_cost in &task_cost.resource_costs {
+                    println!("    {} - ${:.2}/hr: {:.1}h est, {:.1}h actual (${:.2} est, ${:.2} actual)",
+                             resource_cost.resource_name,
+                             resource_cost.hourly_rate,
+                             resource_cost.estimated_hours,
+                             resource_cost.actual_hours,
+                             resource_cost.estimated_cost,
+                             resource_cost.actual_cost);
+                }
+                println!();
+            }
+        }
         
         Ok(())
     }

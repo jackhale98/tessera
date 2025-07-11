@@ -1,1 +1,15 @@
-[]
+[
+    (
+        id: ("4248b2e8-f637-47c5-b560-846e064d35f9"),
+        name: "Project end",
+        description: "We did it",
+        target_date: "2025-07-18T12:00:00Z",
+        actual_date: None,
+        status: Pending,
+        dependent_tasks: [],
+        dependencies: [],
+        created: "2025-07-11T22:27:35.413942906Z",
+        updated: "2025-07-11T22:27:35.413942906Z",
+        metadata: {},
+    ),
+]
