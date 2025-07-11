@@ -9,6 +9,9 @@ path = "src/main.rs"
 
 [dependencies]
 tessera-core = { path = "../crates/core" }
+tessera-requirements = { path = "../crates/requirements" }
+tessera-risk = { path = "../crates/risk" }
+tessera-verification = { path = "../crates/verification" }
 tessera-quality = { path = "../crates/quality" }
 tessera-pm = { path = "../crates/pm" }
 tessera-tol = { path = "../crates/tol" }

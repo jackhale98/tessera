@@ -1,5 +1,4 @@
 use crate::PmCommands;
-use colored::Colorize;
 use tessera_core::{ProjectContext, Result};
 use tessera_pm::ProjectCommands;
 

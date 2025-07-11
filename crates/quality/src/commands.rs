@@ -1,6 +1,5 @@
 use crate::data::*;
 use crate::repository::QualityRepository;
-use crate::risk_analysis::{RiskAnalyzer, RiskAnalysisConfig};
 use tessera_core::{ProjectContext, Result};
 use inquire::{Select, Text};
 use std::collections::HashMap;
@@ -144,25 +143,48 @@ impl QualityCommands {
             return Ok(());
         }
         
-        let config = RiskAnalysisConfig::default();
-        let analyzer = RiskAnalyzer::new(config);
+        println!("Risk Assessment Results:");
+        println!("=======================");
         
-        println!("Running Monte Carlo risk analysis...");
-        let analysis = analyzer.analyze_project_risks(risks)?;
+        let mut risk_categories = HashMap::new();
+        let mut high_risk_count = 0;
+        let mut critical_risk_count = 0;
         
-        println!("\nRisk Analysis Results:");
-        println!("Overall Risk Score: {:.2}", analysis.overall_risk_score);
-        println!("High Risk Items: {}", analysis.high_risk_items.len());
-        
-        println!("\nIndividual Risk Analysis:");
-        for result in &analysis.individual_risks {
-            println!("  {} - Score: {:.3}, 95th Percentile: {:.3}, Recommendation: {:?}",
-                     result.risk_name, result.monte_carlo_score, result.percentile_95, result.recommendation);
+        for risk in risks {
+            let risk_level = match risk.risk_score {
+                score if score >= 0.75 => {
+                    critical_risk_count += 1;
+                    "Critical"
+                },
+                score if score >= 0.5 => {
+                    high_risk_count += 1;
+                    "High"
+                },
+                score if score >= 0.25 => "Medium",
+                _ => "Low",
+            };
+            
+            *risk_categories.entry(risk.category.clone()).or_insert(0) += 1;
+            
+            println!("• {} - Score: {:.2} ({}) - {}", 
+                     risk.name, risk.risk_score, risk_level, risk.category);
         }
         
-        println!("\nRecommendations:");
-        for recommendation in &analysis.recommendations {
-            println!("• {}", recommendation);
+        println!("\nSummary:");
+        println!("Critical Risks: {}", critical_risk_count);
+        println!("High Risks: {}", high_risk_count);
+        
+        println!("\nRisk Categories:");
+        for (category, count) in risk_categories {
+            println!("  {}: {} risks", category, count);
+        }
+        
+        if critical_risk_count > 0 {
+            println!("\n⚠️  Immediate action required for critical risks!");
+        } else if high_risk_count > 0 {
+            println!("\n⚠️  Mitigation strategies needed for high risks.");
+        } else {
+            println!("\n✅ Risk levels are within acceptable limits.");
         }
         
         Ok(())

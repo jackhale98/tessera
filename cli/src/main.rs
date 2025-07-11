@@ -7,7 +7,10 @@ mod commands;
 mod interactive;
 mod utils;
 
-use commands::*;
+use commands::{
+    execute_requirements_command, execute_risk_command, execute_verification_command,
+    execute_quality_command, execute_pm_command, execute_tol_command, execute_link_command
+};
 use interactive::*;
 
 #[derive(Parser)]
@@ -36,7 +39,25 @@ enum Commands {
         template: Option<String>,
     },
     
-    /// Quality management commands
+    /// Requirements management commands
+    Requirements {
+        #[command(subcommand)]
+        command: RequirementsCommands,
+    },
+    
+    /// Risk management commands
+    Risk {
+        #[command(subcommand)]
+        command: RiskCommands,
+    },
+    
+    /// Verification and testing commands
+    Verification {
+        #[command(subcommand)]
+        command: VerificationCommands,
+    },
+    
+    /// Legacy quality management commands (deprecated)
     Quality {
         #[command(subcommand)]
         command: QualityCommands,
@@ -74,7 +95,7 @@ enum Commands {
 }
 
 #[derive(Subcommand, Clone)]
-enum QualityCommands {
+enum RequirementsCommands {
     /// Add a new requirement
     #[command(name = "req:add")]
     AddRequirement,
@@ -99,7 +120,6 @@ enum QualityCommands {
     #[command(name = "input:edit")]
     EditInput,
     
-    
     /// Add a design output
     #[command(name = "output:add")]
     AddOutput,
@@ -111,8 +131,6 @@ enum QualityCommands {
     /// Edit a design output
     #[command(name = "output:edit")]
     EditOutput,
-    
-    
     
     /// Add a verification
     #[command(name = "verification:add")]
@@ -126,6 +144,32 @@ enum QualityCommands {
     #[command(name = "verification:edit")]
     EditVerification,
     
+    /// Show requirements dashboard
+    #[command(name = "dashboard")]
+    Dashboard,
+    
+    /// Show traceability matrix
+    #[command(name = "trace:matrix")]
+    TraceabilityMatrix,
+}
+
+#[derive(Subcommand, Clone)]
+enum RiskCommands {
+    /// Add a new risk
+    #[command(name = "risk:add")]
+    AddRisk,
+    
+    /// List risks
+    #[command(name = "risk:list")]
+    ListRisks,
+    
+    /// Edit a risk
+    #[command(name = "risk:edit")]
+    EditRisk,
+    
+    /// Assess risks
+    #[command(name = "risk:assess")]
+    AssessRisks,
     
     /// Add a design control
     #[command(name = "control:add")]
@@ -139,31 +183,53 @@ enum QualityCommands {
     #[command(name = "control:edit")]
     EditControl,
     
-    /// Add a risk
-    #[command(name = "risk:add")]
-    AddRisk,
+    /// Show risk dashboard
+    #[command(name = "dashboard")]
+    Dashboard,
     
-    /// List risks
-    #[command(name = "risk:list")]
-    ListRisks,
-    
-    /// Edit a risk
-    #[command(name = "risk:edit")]
-    EditRisk,
-    
-    /// Assess project risks
-    #[command(name = "risk:assess")]
-    AssessRisks,
-    
-    /// Traceability matrix
-    #[command(name = "trace:matrix")]
-    TraceabilityMatrix,
-    
-    /// Risk scoring tools
-    #[command(name = "risk:score")]
+    /// Risk scoring analysis
+    #[command(name = "scoring")]
     RiskScoring,
+}
+
+#[derive(Subcommand, Clone)]
+enum VerificationCommands {
+    /// Add a test procedure
+    #[command(name = "procedure:add")]
+    AddProcedure,
     
-    /// Quality dashboard
+    /// List test procedures
+    #[command(name = "procedure:list")]
+    ListProcedures,
+    
+    /// Edit a test procedure
+    #[command(name = "procedure:edit")]
+    EditProcedure,
+    
+    /// Add a test execution
+    #[command(name = "execution:add")]
+    AddExecution,
+    
+    /// List test executions
+    #[command(name = "execution:list")]
+    ListExecutions,
+    
+    /// Edit a test execution
+    #[command(name = "execution:edit")]
+    EditExecution,
+    
+    /// Show verification dashboard
+    #[command(name = "dashboard")]
+    Dashboard,
+    
+    /// Generate test report
+    #[command(name = "report")]
+    GenerateReport,
+}
+
+#[derive(Subcommand, Clone)]
+enum QualityCommands {
+    /// Legacy quality dashboard
     Dashboard,
 }
 
@@ -273,6 +339,21 @@ async fn main() -> Result<()> {
             let project_ctx = init_project(name, description, template)?;
             println!("{}", "Project initialized successfully!".green());
             println!("Project location: {}", project_ctx.root_path.display());
+        },
+        
+        Some(Commands::Requirements { command }) => {
+            let project_ctx = load_project_context(cli.project)?;
+            execute_requirements_command(command, project_ctx).await?;
+        },
+        
+        Some(Commands::Risk { command }) => {
+            let project_ctx = load_project_context(cli.project)?;
+            execute_risk_command(command, project_ctx).await?;
+        },
+        
+        Some(Commands::Verification { command }) => {
+            let project_ctx = load_project_context(cli.project)?;
+            execute_verification_command(command, project_ctx).await?;
         },
         
         Some(Commands::Quality { command }) => {

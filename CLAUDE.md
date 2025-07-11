@@ -118,9 +118,9 @@ cargo run -- link validate
 - **Design Inputs/Outputs**: Traceable design artifacts with automatic requirement linking
 - **Verification Management**: Dedicated verification entities that validate design outputs
 - **Design Controls**: Review, inspection, test, and validation processes
-- **Risk Management**: Categorical risk assessment with probability/impact scoring
-- **Monte Carlo Risk Analysis**: Statistical risk assessment with confidence intervals and recommendations
-- **Auto-Scoring Engine**: Rule-based risk scoring with configurable thresholds and confidence metrics
+- **Risk Management**: FMEA-style risk assessment with probability/impact scoring and configurable ranges
+- **Risk Scoring**: Simple auto-scoring (probability × impact) with real-time calculation
+- **Risk Categorization**: Low/Medium/High/Critical risk levels with configurable thresholds
 - **Traceability Matrix**: Comprehensive link management with gap analysis and coverage reporting
 - **Interactive Editing**: Full CRUD operations for all quality entities with guided workflows
 

@@ -1,16 +1,29 @@
-use crate::commands::quality::execute_quality_command;
-use crate::commands::pm::execute_pm_command;
-use crate::commands::tol::execute_tol_command;
-use crate::{QualityCommands, PmCommands, TolCommands};
+use crate::commands::{
+    execute_requirements_command, execute_risk_command, execute_verification_command,
+    execute_quality_command, execute_pm_command, execute_tol_command
+};
+use crate::{RequirementsCommands, RiskCommands, VerificationCommands, QualityCommands, PmCommands, TolCommands};
 use colored::Colorize;
-use tessera_core::{ProjectContext, Result, RiskScoringConfig};
-use inquire::{Select, Text, Confirm};
+use tessera_core::{ProjectContext, Result};
+use inquire::Select;
 
 pub async fn run_interactive_mode(mut project_ctx: ProjectContext, module: Option<String>) -> Result<()> {
     println!("{}", "Welcome to Tessera Interactive Mode".bold().blue());
     println!("Project: {}", project_ctx.metadata.name);
     
     match module {
+        Some(ref m) if m == "requirements" => {
+            project_ctx.set_current_module("requirements".to_string());
+            run_requirements_interactive(project_ctx).await?;
+        },
+        Some(ref m) if m == "risk" => {
+            project_ctx.set_current_module("risk".to_string());
+            run_risk_interactive(project_ctx).await?;
+        },
+        Some(ref m) if m == "verification" => {
+            project_ctx.set_current_module("verification".to_string());
+            run_verification_interactive(project_ctx).await?;
+        },
         Some(ref m) if m == "quality" => {
             project_ctx.set_current_module("quality".to_string());
             run_quality_interactive(project_ctx).await?;
@@ -37,7 +50,10 @@ pub async fn run_interactive_mode(mut project_ctx: ProjectContext, module: Optio
 async fn run_main_interactive(project_ctx: ProjectContext) -> Result<()> {
     loop {
         let options = vec![
-            "Quality Management",
+            "Requirements Management",
+            "Risk Management",
+            "Verification & Testing",
+            "Quality Management (Legacy)",
             "Project Management", 
             "Tolerance Analysis",
             "Project Status",
@@ -49,7 +65,16 @@ async fn run_main_interactive(project_ctx: ProjectContext) -> Result<()> {
             .prompt()?;
         
         match selection {
-            "Quality Management" => {
+            "Requirements Management" => {
+                run_requirements_interactive(project_ctx.clone()).await?;
+            },
+            "Risk Management" => {
+                run_risk_interactive(project_ctx.clone()).await?;
+            },
+            "Verification & Testing" => {
+                run_verification_interactive(project_ctx.clone()).await?;
+            },
+            "Quality Management (Legacy)" => {
                 run_quality_interactive(project_ctx.clone()).await?;
             },
             "Project Management" => {
@@ -72,34 +97,38 @@ async fn run_main_interactive(project_ctx: ProjectContext) -> Result<()> {
     Ok(())
 }
 
-async fn run_quality_interactive(project_ctx: ProjectContext) -> Result<()> {
+async fn run_requirements_interactive(project_ctx: ProjectContext) -> Result<()> {
     loop {
-        println!("\n{}", "Quality Management".bold().blue());
+        println!("\n{}", "Requirements Management".bold().blue());
         
         let options = vec![
-            "📋 Manage Entities",
-            "📊 Analysis Tools",
-            "⚙️  Settings",
-            "📈 Dashboard",
+            "📝 Requirements",
+            "📥 Design Inputs",
+            "📤 Design Outputs",
+            "✅ Verifications",
+            "📊 Dashboard",
             "← Back to Main Menu",
         ];
         
         let selection = Select::new("Select category:", options)
-            .with_help_message("Choose a quality management category")
+            .with_help_message("Choose a requirements management category")
             .prompt()?;
         
         let result = match selection {
-            "📋 Manage Entities" => {
-                run_quality_manage_menu(project_ctx.clone()).await
+            "📝 Requirements" => {
+                run_requirements_submenu(project_ctx.clone()).await
             },
-            "📊 Analysis Tools" => {
-                run_quality_analysis_menu(project_ctx.clone()).await
+            "📥 Design Inputs" => {
+                run_design_inputs_submenu(project_ctx.clone()).await
             },
-            "⚙️  Settings" => {
-                run_quality_settings_menu(project_ctx.clone()).await
+            "📤 Design Outputs" => {
+                run_design_outputs_submenu(project_ctx.clone()).await
             },
-            "📈 Dashboard" => {
-                execute_quality_command(QualityCommands::Dashboard, project_ctx.clone()).await
+            "✅ Verifications" => {
+                run_verifications_submenu(project_ctx.clone()).await
+            },
+            "📊 Dashboard" => {
+                execute_requirements_command(RequirementsCommands::Dashboard, project_ctx.clone()).await
             },
             "← Back to Main Menu" => {
                 break;
@@ -115,68 +144,36 @@ async fn run_quality_interactive(project_ctx: ProjectContext) -> Result<()> {
     Ok(())
 }
 
-async fn run_quality_manage_menu(project_ctx: ProjectContext) -> Result<()> {
+async fn run_risk_interactive(project_ctx: ProjectContext) -> Result<()> {
     loop {
-        println!("\n{}", "Quality Management - Manage Entities".bold().blue());
+        println!("\n{}", "Risk Management".bold().blue());
         
         let options = vec![
-            "📝 Requirements",
-            "📥 Design Inputs",
-            "📤 Design Outputs", 
-            "✅ Verifications",
-            "🛡️  Design Controls",
             "⚠️  Risks",
-            "← Back",
+            "🛡️  Design Controls",
+            "📊 Risk Assessment",
+            "📈 Dashboard",
+            "← Back to Main Menu",
         ];
         
-        let selection = Select::new("Select entity type:", options)
-            .with_help_message("Choose what to manage")
+        let selection = Select::new("Select category:", options)
+            .with_help_message("Choose a risk management category")
             .prompt()?;
         
         let result = match selection {
-            "📝 Requirements" => {
-                run_entity_actions_menu("Requirements", &[
-                    ("Add Requirement", QualityCommands::AddRequirement),
-                    ("List Requirements", QualityCommands::ListRequirements),
-                    ("Edit Requirement", QualityCommands::EditRequirement),
-                ], project_ctx.clone()).await
-            },
-            "📥 Design Inputs" => {
-                run_entity_actions_menu("Design Inputs", &[
-                    ("Add Design Input", QualityCommands::AddInput),
-                    ("List Design Inputs", QualityCommands::ListInputs),
-                    ("Edit Design Input", QualityCommands::EditInput),
-                ], project_ctx.clone()).await
-            },
-            "📤 Design Outputs" => {
-                run_entity_actions_menu("Design Outputs", &[
-                    ("Add Design Output", QualityCommands::AddOutput),
-                    ("List Design Outputs", QualityCommands::ListOutputs),
-                    ("Edit Design Output", QualityCommands::EditOutput),
-                ], project_ctx.clone()).await
-            },
-            "✅ Verifications" => {
-                run_entity_actions_menu("Verifications", &[
-                    ("Add Verification", QualityCommands::AddVerification),
-                    ("List Verifications", QualityCommands::ListVerifications),
-                    ("Edit Verification", QualityCommands::EditVerification),
-                ], project_ctx.clone()).await
+            "⚠️  Risks" => {
+                run_risks_submenu(project_ctx.clone()).await
             },
             "🛡️  Design Controls" => {
-                run_entity_actions_menu("Design Controls", &[
-                    ("Add Design Control", QualityCommands::AddControl),
-                    ("List Design Controls", QualityCommands::ListControls),
-                    ("Edit Design Control", QualityCommands::EditControl),
-                ], project_ctx.clone()).await
+                run_design_controls_submenu(project_ctx.clone()).await
             },
-            "⚠️  Risks" => {
-                run_entity_actions_menu("Risks", &[
-                    ("Add Risk", QualityCommands::AddRisk),
-                    ("List Risks", QualityCommands::ListRisks),
-                    ("Edit Risk", QualityCommands::EditRisk),
-                ], project_ctx.clone()).await
+            "📊 Risk Assessment" => {
+                execute_risk_command(RiskCommands::AssessRisks, project_ctx.clone()).await
             },
-            "← Back" => {
+            "📈 Dashboard" => {
+                execute_risk_command(RiskCommands::Dashboard, project_ctx.clone()).await
+            },
+            "← Back to Main Menu" => {
                 break;
             },
             _ => Ok(()),
@@ -190,56 +187,36 @@ async fn run_quality_manage_menu(project_ctx: ProjectContext) -> Result<()> {
     Ok(())
 }
 
-async fn run_entity_actions_menu(entity_type: &str, actions: &[(&str, QualityCommands)], project_ctx: ProjectContext) -> Result<()> {
-    println!("\n{}", format!("Quality Management - {}", entity_type).bold().blue());
-    
-    let mut options: Vec<String> = actions.iter().map(|(name, _)| name.to_string()).collect();
-    options.push("← Back".to_string());
-    
-    let selection = Select::new("Select action:", options)
-        .with_help_message(&format!("Choose action for {}", entity_type.to_lowercase()))
-        .prompt()?;
-    
-    if selection == "← Back" {
-        return Ok(());
-    }
-    
-    for (action_name, command) in actions {
-        if selection == *action_name {
-            execute_quality_command(command.clone(), project_ctx).await?;
-            break;
-        }
-    }
-    
-    Ok(())
-}
-
-async fn run_quality_settings_menu(mut project_ctx: ProjectContext) -> Result<()> {
+async fn run_verification_interactive(project_ctx: ProjectContext) -> Result<()> {
     loop {
-        println!("\n{}", "Quality Management - Settings".bold().blue());
+        println!("\n{}", "Verification & Testing".bold().blue());
         
         let options = vec![
-            "📊 Risk Scoring Configuration",
-            "🎯 Risk Tolerance Thresholds", 
-            "📋 View Current Settings",
-            "← Back",
+            "📋 Test Procedures",
+            "🔄 Test Executions",
+            "📊 Dashboard",
+            "📄 Generate Report",
+            "← Back to Main Menu",
         ];
         
-        let selection = Select::new("Select setting to configure:", options)
-            .with_help_message("Choose settings to modify")
+        let selection = Select::new("Select category:", options)
+            .with_help_message("Choose a verification category")
             .prompt()?;
         
         let result = match selection {
-            "📊 Risk Scoring Configuration" => {
-                configure_risk_scoring(&mut project_ctx).await
+            "📋 Test Procedures" => {
+                execute_verification_command(VerificationCommands::ListProcedures, project_ctx.clone()).await
             },
-            "🎯 Risk Tolerance Thresholds" => {
-                configure_risk_thresholds(&mut project_ctx).await
+            "🔄 Test Executions" => {
+                execute_verification_command(VerificationCommands::ListExecutions, project_ctx.clone()).await
             },
-            "📋 View Current Settings" => {
-                view_current_settings(&project_ctx).await
+            "📊 Dashboard" => {
+                execute_verification_command(VerificationCommands::Dashboard, project_ctx.clone()).await
             },
-            "← Back" => {
+            "📄 Generate Report" => {
+                execute_verification_command(VerificationCommands::GenerateReport, project_ctx.clone()).await
+            },
+            "← Back to Main Menu" => {
                 break;
             },
             _ => Ok(()),
@@ -253,182 +230,31 @@ async fn run_quality_settings_menu(mut project_ctx: ProjectContext) -> Result<()
     Ok(())
 }
 
-async fn configure_risk_scoring(project_ctx: &mut ProjectContext) -> Result<()> {
-    println!("\n{}", "Risk Scoring Configuration".bold().blue());
-    
-    let configure_prob = Confirm::new("Configure probability range?")
-        .with_default(true)
-        .prompt()?;
-    
-    if configure_prob {
-        println!("\n{}", "Probability Range Configuration".bold());
-        println!("Current: [{}, {}, {}]", 
-            project_ctx.metadata.quality_settings.risk_probability_range.range[0],
-            project_ctx.metadata.quality_settings.risk_probability_range.range[1],
-            project_ctx.metadata.quality_settings.risk_probability_range.range[2]);
-        
-        let start: i32 = Text::new("Start value:")
-            .with_default(&project_ctx.metadata.quality_settings.risk_probability_range.range[0].to_string())
-            .prompt()?
-            .parse()
-            .unwrap_or(1);
-        
-        let end: i32 = Text::new("End value:")
-            .with_default(&project_ctx.metadata.quality_settings.risk_probability_range.range[1].to_string())
-            .prompt()?
-            .parse()
-            .unwrap_or(5);
-        
-        let step: i32 = Text::new("Step size:")
-            .with_default(&project_ctx.metadata.quality_settings.risk_probability_range.range[2].to_string())
-            .prompt()?
-            .parse()
-            .unwrap_or(1);
-        
-        project_ctx.metadata.quality_settings.risk_probability_range = RiskScoringConfig::new(start, end, step);
-        println!("{} Probability range updated to: [{}, {}, {}]", "✓".green(), start, end, step);
-    }
-    
-    let configure_impact = Confirm::new("Configure impact range?")
-        .with_default(true)
-        .prompt()?;
-    
-    if configure_impact {
-        println!("\n{}", "Impact Range Configuration".bold());
-        println!("Current: [{}, {}, {}]", 
-            project_ctx.metadata.quality_settings.risk_impact_range.range[0],
-            project_ctx.metadata.quality_settings.risk_impact_range.range[1],
-            project_ctx.metadata.quality_settings.risk_impact_range.range[2]);
-        
-        let start: i32 = Text::new("Start value:")
-            .with_default(&project_ctx.metadata.quality_settings.risk_impact_range.range[0].to_string())
-            .prompt()?
-            .parse()
-            .unwrap_or(1);
-        
-        let end: i32 = Text::new("End value:")
-            .with_default(&project_ctx.metadata.quality_settings.risk_impact_range.range[1].to_string())
-            .prompt()?
-            .parse()
-            .unwrap_or(5);
-        
-        let step: i32 = Text::new("Step size:")
-            .with_default(&project_ctx.metadata.quality_settings.risk_impact_range.range[2].to_string())
-            .prompt()?
-            .parse()
-            .unwrap_or(1);
-        
-        project_ctx.metadata.quality_settings.risk_impact_range = RiskScoringConfig::new(start, end, step);
-        println!("{} Impact range updated to: [{}, {}, {}]", "✓".green(), start, end, step);
-    }
-    
-    // Save the updated settings
-    let project_file = project_ctx.root_path.join("project.ron");
-    project_ctx.metadata.save_to_file(project_file)?;
-    println!("{} Settings saved to project file", "✓".green());
-    
-    Ok(())
-}
-
-async fn configure_risk_thresholds(project_ctx: &mut ProjectContext) -> Result<()> {
-    println!("\n{}", "Risk Tolerance Thresholds Configuration".bold().blue());
-    println!("These thresholds determine risk categories based on normalized risk scores (0.0 to 1.0)");
-    
-    let current = &project_ctx.metadata.quality_settings.risk_tolerance_thresholds;
-    println!("Current thresholds:");
-    println!("  BAR (Broadly Acceptable): < {:.2}", current.bar_threshold);
-    println!("  Tolerable (with reduction): {:.2} - {:.2}", current.bar_threshold, current.afap_threshold);
-    println!("  AFAP (As Far As Practicable): {:.2} - {:.2}", current.afap_threshold, current.int_threshold);
-    println!("  Intolerable: > {:.2}", current.int_threshold);
-    
-    let bar: f64 = Text::new("BAR threshold (0.0-1.0):")
-        .with_default(&current.bar_threshold.to_string())
-        .prompt()?
-        .parse()
-        .unwrap_or(0.25);
-    
-    let afap: f64 = Text::new("AFAP threshold (0.0-1.0):")
-        .with_default(&current.afap_threshold.to_string())
-        .prompt()?
-        .parse()
-        .unwrap_or(0.50);
-    
-    let int: f64 = Text::new("Intolerable threshold (0.0-1.0):")
-        .with_default(&current.int_threshold.to_string())
-        .prompt()?
-        .parse()
-        .unwrap_or(0.75);
-    
-    match tessera_core::RiskToleranceThresholds::new(bar, afap, int) {
-        Ok(new_thresholds) => {
-            project_ctx.metadata.quality_settings.risk_tolerance_thresholds = new_thresholds;
-            println!("{} Risk tolerance thresholds updated", "✓".green());
-            
-            // Save the updated settings
-            let project_file = project_ctx.root_path.join("project.ron");
-            project_ctx.metadata.save_to_file(project_file)?;
-            println!("{} Settings saved to project file", "✓".green());
-        },
-        Err(e) => {
-            println!("{} Invalid thresholds: {}", "✗".red(), e);
-        }
-    }
-    
-    Ok(())
-}
-
-async fn view_current_settings(project_ctx: &ProjectContext) -> Result<()> {
-    println!("\n{}", "Current Quality Settings".bold().blue());
-    
-    let prob_range = &project_ctx.metadata.quality_settings.risk_probability_range;
-    let impact_range = &project_ctx.metadata.quality_settings.risk_impact_range;
-    let thresholds = &project_ctx.metadata.quality_settings.risk_tolerance_thresholds;
-    
-    println!("\n{}", "Risk Scoring Ranges:".bold());
-    println!("  Probability: [{}, {}, {}] -> values: {:?}", 
-        prob_range.range[0], prob_range.range[1], prob_range.range[2], prob_range.values());
-    println!("  Impact: [{}, {}, {}] -> values: {:?}", 
-        impact_range.range[0], impact_range.range[1], impact_range.range[2], impact_range.values());
-    
-    println!("\n{}", "Risk Tolerance Thresholds:".bold());
-    println!("  BAR (Broadly Acceptable): < {:.2}", thresholds.bar_threshold);
-    println!("  Tolerable (with reduction): {:.2} - {:.2}", thresholds.bar_threshold, thresholds.afap_threshold);
-    println!("  AFAP (As Far As Practicable): {:.2} - {:.2}", thresholds.afap_threshold, thresholds.int_threshold);
-    println!("  Intolerable: > {:.2}", thresholds.int_threshold);
-    
-    Ok(())
-}
-
-
-async fn run_quality_analysis_menu(project_ctx: ProjectContext) -> Result<()> {
+async fn run_quality_interactive(project_ctx: ProjectContext) -> Result<()> {
     loop {
-        println!("\n{}", "Quality Management - Analysis Tools".bold().blue());
+        println!("\n{}", "Quality Management".bold().blue());
         
         let options = vec![
-            "⚠️  Assess Risks",
-            "📊 Risk Scoring Tools",
-            "🔍 Traceability Matrix",
-            "← Back",
+            "📈 Dashboard",
+            "← Back to Main Menu",
         ];
         
-        let selection = Select::new("Select analysis tool:", options)
-            .with_help_message("Choose analysis to run")
+        let selection = Select::new("Select category:", options)
+            .with_help_message("Choose a quality management category")
             .prompt()?;
         
         let result = match selection {
-            "⚠️  Assess Risks" => {
-                execute_quality_command(QualityCommands::AssessRisks, project_ctx.clone()).await
+            "📈 Dashboard" => {
+                execute_quality_command(QualityCommands::Dashboard, project_ctx.clone()).await
             },
-            "📊 Risk Scoring Tools" => {
-                execute_quality_command(QualityCommands::RiskScoring, project_ctx.clone()).await
-            },
-            "🔍 Traceability Matrix" => {
-                execute_quality_command(QualityCommands::TraceabilityMatrix, project_ctx.clone()).await
-            },
-            "← Back" => {
+            "← Back to Main Menu" => {
                 break;
             },
-            _ => Ok(()),
+            _ => {
+                println!("{}", "This functionality has been moved to the new modular structure.".yellow());
+                println!("Use 'Requirements Management', 'Risk Management', or 'Verification & Testing' from the main menu.");
+                Ok(())
+            },
         };
         
         if let Err(e) = result {
@@ -438,6 +264,7 @@ async fn run_quality_analysis_menu(project_ctx: ProjectContext) -> Result<()> {
     
     Ok(())
 }
+
 
 fn show_project_status(project_ctx: &ProjectContext) -> Result<()> {
     println!("\n{}", "Project Status".bold().blue());
@@ -706,6 +533,249 @@ async fn run_tol_analysis_menu(project_ctx: ProjectContext) -> Result<()> {
             },
             "⚙️  Configure Analysis Settings" => {
                 execute_tol_command(TolCommands::ConfigureAnalysis, project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+
+// Requirements Management Submenus
+
+async fn run_requirements_submenu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Requirements Management - Requirements".bold().blue());
+        
+        let options = vec![
+            "➕ Add Requirement",
+            "📋 List Requirements", 
+            "✏️  Edit Requirement",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select action:", options)
+            .with_help_message("Choose what to do with requirements")
+            .prompt()?;
+        
+        let result = match selection {
+            "➕ Add Requirement" => {
+                execute_requirements_command(RequirementsCommands::AddRequirement, project_ctx.clone()).await
+            },
+            "📋 List Requirements" => {
+                execute_requirements_command(RequirementsCommands::ListRequirements, project_ctx.clone()).await
+            },
+            "✏️  Edit Requirement" => {
+                execute_requirements_command(RequirementsCommands::EditRequirement, project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+async fn run_design_inputs_submenu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Requirements Management - Design Inputs".bold().blue());
+        
+        let options = vec![
+            "➕ Add Design Input",
+            "📋 List Design Inputs",
+            "✏️  Edit Design Input", 
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select action:", options)
+            .with_help_message("Choose what to do with design inputs")
+            .prompt()?;
+        
+        let result = match selection {
+            "➕ Add Design Input" => {
+                execute_requirements_command(RequirementsCommands::AddInput, project_ctx.clone()).await
+            },
+            "📋 List Design Inputs" => {
+                execute_requirements_command(RequirementsCommands::ListInputs, project_ctx.clone()).await
+            },
+            "✏️  Edit Design Input" => {
+                execute_requirements_command(RequirementsCommands::EditInput, project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+async fn run_design_outputs_submenu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Requirements Management - Design Outputs".bold().blue());
+        
+        let options = vec![
+            "➕ Add Design Output",
+            "📋 List Design Outputs",
+            "✏️  Edit Design Output",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select action:", options)
+            .with_help_message("Choose what to do with design outputs")
+            .prompt()?;
+        
+        let result = match selection {
+            "➕ Add Design Output" => {
+                execute_requirements_command(RequirementsCommands::AddOutput, project_ctx.clone()).await
+            },
+            "📋 List Design Outputs" => {
+                execute_requirements_command(RequirementsCommands::ListOutputs, project_ctx.clone()).await
+            },
+            "✏️  Edit Design Output" => {
+                execute_requirements_command(RequirementsCommands::EditOutput, project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+async fn run_verifications_submenu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Requirements Management - Verifications".bold().blue());
+        
+        let options = vec![
+            "➕ Add Verification",
+            "📋 List Verifications",
+            "✏️  Edit Verification",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select action:", options)
+            .with_help_message("Choose what to do with verifications")
+            .prompt()?;
+        
+        let result = match selection {
+            "➕ Add Verification" => {
+                execute_requirements_command(RequirementsCommands::AddVerification, project_ctx.clone()).await
+            },
+            "📋 List Verifications" => {
+                execute_requirements_command(RequirementsCommands::ListVerifications, project_ctx.clone()).await
+            },
+            "✏️  Edit Verification" => {
+                execute_requirements_command(RequirementsCommands::EditVerification, project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+// Risk Management Submenus
+
+async fn run_risks_submenu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Risk Management - Risks".bold().blue());
+        
+        let options = vec![
+            "➕ Add Risk",
+            "📋 List Risks",
+            "✏️  Edit Risk",
+            "📊 Risk Scoring",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select action:", options)
+            .with_help_message("Choose what to do with risks")
+            .prompt()?;
+        
+        let result = match selection {
+            "➕ Add Risk" => {
+                execute_risk_command(RiskCommands::AddRisk, project_ctx.clone()).await
+            },
+            "📋 List Risks" => {
+                execute_risk_command(RiskCommands::ListRisks, project_ctx.clone()).await
+            },
+            "✏️  Edit Risk" => {
+                execute_risk_command(RiskCommands::EditRisk, project_ctx.clone()).await
+            },
+            "📊 Risk Scoring" => {
+                execute_risk_command(RiskCommands::RiskScoring, project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+async fn run_design_controls_submenu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Risk Management - Design Controls".bold().blue());
+        
+        let options = vec![
+            "➕ Add Design Control",
+            "📋 List Design Controls",
+            "✏️  Edit Design Control",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select action:", options)
+            .with_help_message("Choose what to do with design controls")
+            .prompt()?;
+        
+        let result = match selection {
+            "➕ Add Design Control" => {
+                execute_risk_command(RiskCommands::AddControl, project_ctx.clone()).await
+            },
+            "📋 List Design Controls" => {
+                execute_risk_command(RiskCommands::ListControls, project_ctx.clone()).await
+            },
+            "✏️  Edit Design Control" => {
+                execute_risk_command(RiskCommands::EditControl, project_ctx.clone()).await
             },
             "← Back" => {
                 break;

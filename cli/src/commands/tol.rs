@@ -1,5 +1,4 @@
 use crate::TolCommands;
-use colored::Colorize;
 use tessera_core::{ProjectContext, Result};
 use tessera_tol::ToleranceCommands;
 
