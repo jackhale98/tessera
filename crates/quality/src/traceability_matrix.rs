@@ -1,5 +1,5 @@
-use crate::{Requirement, DesignInput, DesignOutput, DesignControl, Risk, QualityRepository};
-use tessera_core::{Id, Result, DesignTrackError};
+use crate::QualityRepository;
+use tessera_core::{Id, Result};
 use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use colored::Colorize;
@@ -10,7 +10,7 @@ pub struct TraceabilityMatrix {
     pub requirements: Vec<Id>,
     pub inputs: Vec<Id>,
     pub outputs: Vec<Id>,
-    pub controls: Vec<Id>,
+    pub verifications: Vec<Id>,
     pub risks: Vec<Id>,
     pub links: HashMap<(Id, Id), TraceabilityLink>,
 }
@@ -97,14 +97,14 @@ impl TraceabilityMatrix {
         let requirements: Vec<Id> = repository.get_requirements().iter().map(|r| r.id).collect();
         let inputs: Vec<Id> = repository.get_inputs().iter().map(|i| i.id).collect();
         let outputs: Vec<Id> = repository.get_outputs().iter().map(|o| o.id).collect();
-        let controls: Vec<Id> = repository.get_controls().iter().map(|c| c.id).collect();
+        let verifications: Vec<Id> = repository.get_verifications().iter().map(|v| v.id).collect();
         let risks: Vec<Id> = repository.get_risks().iter().map(|r| r.id).collect();
 
         let mut matrix = Self {
             requirements,
             inputs,
             outputs,
-            controls,
+            verifications,
             risks,
             links: HashMap::new(),
         };
@@ -116,15 +116,15 @@ impl TraceabilityMatrix {
 
     /// Discover existing links from repository data
     fn discover_existing_links(&mut self, repository: &QualityRepository) {
-        // Links from requirements to other entities via the links field
+        // Links from requirements to inputs via the linked_inputs field
         for requirement in repository.get_requirements() {
-            for link in &requirement.links {
+            for &input_id in &requirement.linked_inputs {
                 self.add_link(TraceabilityLink {
                     source_id: requirement.id,
-                    target_id: link.target_id,
-                    relation: TraceabilityRelation::References,
-                    confidence: 0.8,
-                    notes: link.relation_type.clone().unwrap_or_default(),
+                    target_id: input_id,
+                    relation: TraceabilityRelation::Implements,
+                    confidence: 0.9,
+                    notes: "Auto-discovered from requirement linked inputs".to_string(),
                 });
             }
         }
@@ -142,19 +142,19 @@ impl TraceabilityMatrix {
             }
         }
 
-        // Links from outputs to requirements and inputs
+        // Links from outputs to inputs
         for output in repository.get_outputs() {
-            for &req_id in &output.requirements {
+            for &input_id in &output.linked_inputs {
                 self.add_link(TraceabilityLink {
-                    source_id: req_id,
+                    source_id: input_id,
                     target_id: output.id,
                     relation: TraceabilityRelation::Satisfies,
                     confidence: 0.9,
-                    notes: "Auto-discovered from output requirements".to_string(),
+                    notes: "Auto-discovered from output inputs".to_string(),
                 });
             }
 
-            for &input_id in &output.inputs {
+            for &input_id in &output.linked_inputs {
                 self.add_link(TraceabilityLink {
                     source_id: input_id,
                     target_id: output.id,
@@ -165,15 +165,15 @@ impl TraceabilityMatrix {
             }
         }
 
-        // Links from controls to outputs
-        for control in repository.get_controls() {
-            for &output_id in &control.outputs {
+        // Links from verifications to outputs
+        for verification in repository.get_verifications() {
+            for &output_id in &verification.linked_outputs {
                 self.add_link(TraceabilityLink {
                     source_id: output_id,
-                    target_id: control.id,
+                    target_id: verification.id,
                     relation: TraceabilityRelation::Controls,
                     confidence: 0.9,
-                    notes: "Auto-discovered from control outputs".to_string(),
+                    notes: "Auto-discovered from verification outputs".to_string(),
                 });
             }
         }
@@ -320,7 +320,7 @@ impl TraceabilityMatrix {
         output.push_str(&format!("  Requirements: {}\n", self.requirements.len()));
         output.push_str(&format!("  Inputs: {}\n", self.inputs.len()));
         output.push_str(&format!("  Outputs: {}\n", self.outputs.len()));
-        output.push_str(&format!("  Controls: {}\n", self.controls.len()));
+        output.push_str(&format!("  Verifications: {}\n", self.verifications.len()));
         output.push_str(&format!("  Risks: {}\n", self.risks.len()));
         output.push_str(&format!("  Total Links: {}\n", self.links.len()));
 
@@ -438,9 +438,9 @@ impl TraceabilityMatrix {
             return (output.name.clone(), "Output".to_string());
         }
 
-        // Check controls
-        if let Some(control) = repository.get_controls().iter().find(|c| c.id == entity_id) {
-            return (control.name.clone(), "Control".to_string());
+        // Check verifications
+        if let Some(verification) = repository.get_verifications().iter().find(|v| v.id == entity_id) {
+            return (verification.name.clone(), "Verification".to_string());
         }
 
         // Check risks

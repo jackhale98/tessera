@@ -152,9 +152,9 @@ async fn run_quality_manage_menu(project_ctx: ProjectContext) -> Result<()> {
                 ], project_ctx.clone()).await
             },
             "🎯 Design Controls" => {
-                run_entity_actions_menu("Design Controls", &[
-                    ("Add Design Control", QualityCommands::AddControl),
-                    ("List Design Controls", QualityCommands::ListControls),
+                run_entity_actions_menu("Verifications", &[
+                    ("Add Verification", QualityCommands::AddVerification),
+                    ("List Verifications", QualityCommands::ListVerifications),
                 ], project_ctx.clone()).await
             },
             "⚠️  Risks" => {
@@ -207,9 +207,8 @@ async fn run_quality_link_menu(project_ctx: ProjectContext) -> Result<()> {
         
         let options = vec![
             "📥➡️📝 Link Input to Requirement",
-            "📤➡️📝 Link Output to Requirement",
             "📤➡️📥 Link Output to Input",
-            "🎯➡️📤 Link Control to Output",
+            "✅➡️📤 Link Verification to Output",
             "← Back",
         ];
         
@@ -221,14 +220,11 @@ async fn run_quality_link_menu(project_ctx: ProjectContext) -> Result<()> {
             "📥➡️📝 Link Input to Requirement" => {
                 execute_quality_command(QualityCommands::LinkInputToRequirement, project_ctx.clone()).await
             },
-            "📤➡️📝 Link Output to Requirement" => {
-                execute_quality_command(QualityCommands::LinkOutputToRequirement, project_ctx.clone()).await
-            },
             "📤➡️📥 Link Output to Input" => {
                 execute_quality_command(QualityCommands::LinkOutputToInput, project_ctx.clone()).await
             },
-            "🎯➡️📤 Link Control to Output" => {
-                execute_quality_command(QualityCommands::LinkControlToOutput, project_ctx.clone()).await
+            "✅➡️📤 Link Verification to Output" => {
+                execute_quality_command(QualityCommands::LinkVerificationToOutput, project_ctx.clone()).await
             },
             "← Back" => {
                 break;

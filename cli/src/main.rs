@@ -103,25 +103,22 @@ enum QualityCommands {
     #[command(name = "output:list")]
     ListOutputs,
     
-    /// Link output to requirement
-    #[command(name = "output:link-req")]
-    LinkOutputToRequirement,
     
     /// Link output to input
     #[command(name = "output:link-input")]
     LinkOutputToInput,
     
-    /// Add a design control
-    #[command(name = "control:add")]
-    AddControl,
+    /// Add a verification
+    #[command(name = "verification:add")]
+    AddVerification,
     
-    /// List design controls
-    #[command(name = "control:list")]
-    ListControls,
+    /// List verifications
+    #[command(name = "verification:list")]
+    ListVerifications,
     
-    /// Link control to output
-    #[command(name = "control:link-output")]
-    LinkControlToOutput,
+    /// Link verification to output
+    #[command(name = "verification:link-output")]
+    LinkVerificationToOutput,
     
     /// Add a risk
     #[command(name = "risk:add")]

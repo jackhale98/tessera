@@ -42,21 +42,7 @@ impl QualityCommands {
             "Other",
         ];
         
-        let category_str = Select::new("Category:", categories).prompt()?;
-        let category = match category_str {
-            "Functional" => RequirementCategory::Functional,
-            "Performance" => RequirementCategory::Performance,
-            "Safety" => RequirementCategory::Safety,
-            "Regulatory" => RequirementCategory::Regulatory,
-            "Usability" => RequirementCategory::Usability,
-            "Reliability" => RequirementCategory::Reliability,
-            "Maintainability" => RequirementCategory::Maintainability,
-            "Environmental" => RequirementCategory::Environmental,
-            _ => {
-                let other_name = Text::new("Other category name:").prompt()?;
-                RequirementCategory::Other(other_name)
-            }
-        };
+        let category = Select::new("Category:", categories).prompt()?.to_string();
         
         let requirement = Requirement::new(name, description, category);
         self.repository.add_requirement(requirement.clone())?;
@@ -82,7 +68,7 @@ impl QualityCommands {
         for (i, req) in requirements.iter().enumerate() {
             println!("{}. {} - {}", i + 1, req.name, req.description);
             println!("   ID: {}", req.id);
-            println!("   Category: {:?}", req.category);
+            println!("   Category: {}", req.category);
             println!("   Priority: {:?}", req.priority);
             println!("   Status: {:?}", req.status);
             println!();
@@ -110,21 +96,7 @@ impl QualityCommands {
             "Other",
         ];
         
-        let category_str = Select::new("Risk category:", risk_categories).prompt()?;
-        let category = match category_str {
-            "Technical" => RiskCategory::Technical,
-            "Schedule" => RiskCategory::Schedule,
-            "Cost" => RiskCategory::Cost,
-            "Quality" => RiskCategory::Quality,
-            "Safety" => RiskCategory::Safety,
-            "Regulatory" => RiskCategory::Regulatory,
-            "Market" => RiskCategory::Market,
-            "Resource" => RiskCategory::Resource,
-            _ => {
-                let other_name = Text::new("Other category name:").prompt()?;
-                RiskCategory::Other(other_name)
-            }
-        };
+        let category = Select::new("Risk category:", risk_categories).prompt()?.to_string();
         
         let probability_str = Text::new("Probability (0.0 - 1.0):")
             .with_default("0.5")
@@ -189,7 +161,7 @@ impl QualityCommands {
         let requirements = self.repository.get_requirements();
         let inputs = self.repository.get_inputs();
         let outputs = self.repository.get_outputs();
-        let controls = self.repository.get_controls();
+        let verifications = self.repository.get_verifications();
         let risks = self.repository.get_risks();
         
         println!("Quality Dashboard");
@@ -197,7 +169,7 @@ impl QualityCommands {
         println!("Requirements: {}", requirements.len());
         println!("Design Inputs: {}", inputs.len());
         println!("Design Outputs: {}", outputs.len());
-        println!("Design Controls: {}", controls.len());
+        println!("Verifications: {}", verifications.len());
         println!("Risks: {}", risks.len());
         
         if !requirements.is_empty() {
@@ -207,10 +179,8 @@ impl QualityCommands {
                 let status = match req.status {
                     RequirementStatus::Draft => "Draft",
                     RequirementStatus::Approved => "Approved",
-                    RequirementStatus::Implemented => "Implemented",
                     RequirementStatus::Verified => "Verified",
-                    RequirementStatus::Failed => "Failed",
-                    RequirementStatus::Deprecated => "Deprecated",
+                    RequirementStatus::Closed => "Closed",
                 };
                 *status_counts.entry(status).or_insert(0) += 1;
             }

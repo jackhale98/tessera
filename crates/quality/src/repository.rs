@@ -6,7 +6,7 @@ pub struct QualityRepository {
     requirements: Vec<Requirement>,
     inputs: Vec<DesignInput>,
     outputs: Vec<DesignOutput>,
-    controls: Vec<DesignControl>,
+    verifications: Vec<Verification>,
     risks: Vec<Risk>,
 }
 
@@ -16,7 +16,7 @@ impl QualityRepository {
             requirements: Vec::new(),
             inputs: Vec::new(),
             outputs: Vec::new(),
-            controls: Vec::new(),
+            verifications: Vec::new(),
             risks: Vec::new(),
         }
     }
@@ -40,9 +40,9 @@ impl QualityRepository {
             repo.outputs = Vec::<DesignOutput>::load_from_file(&outputs_file)?;
         }
         
-        let controls_file = dir.join("controls.ron");
-        if controls_file.exists() {
-            repo.controls = Vec::<DesignControl>::load_from_file(&controls_file)?;
+        let verifications_file = dir.join("verifications.ron");
+        if verifications_file.exists() {
+            repo.verifications = Vec::<Verification>::load_from_file(&verifications_file)?;
         }
         
         let risks_file = dir.join("risks.ron");
@@ -60,7 +60,7 @@ impl QualityRepository {
         Vec::<Requirement>::save_to_file(&self.requirements, dir.join("requirements.ron"))?;
         Vec::<DesignInput>::save_to_file(&self.inputs, dir.join("inputs.ron"))?;
         Vec::<DesignOutput>::save_to_file(&self.outputs, dir.join("outputs.ron"))?;
-        Vec::<DesignControl>::save_to_file(&self.controls, dir.join("controls.ron"))?;
+        Vec::<Verification>::save_to_file(&self.verifications, dir.join("verifications.ron"))?;
         Vec::<Risk>::save_to_file(&self.risks, dir.join("risks.ron"))?;
         
         Ok(())
@@ -84,9 +84,9 @@ impl QualityRepository {
         Ok(())
     }
     
-    pub fn add_control(&mut self, control: DesignControl) -> Result<()> {
-        control.validate()?;
-        self.controls.push(control);
+    pub fn add_verification(&mut self, verification: Verification) -> Result<()> {
+        verification.validate()?;
+        self.verifications.push(verification);
         Ok(())
     }
     
@@ -108,8 +108,8 @@ impl QualityRepository {
         &self.outputs
     }
     
-    pub fn get_controls(&self) -> &[DesignControl] {
-        &self.controls
+    pub fn get_verifications(&self) -> &[Verification] {
+        &self.verifications
     }
     
     pub fn get_risks(&self) -> &[Risk] {
@@ -128,8 +128,28 @@ impl QualityRepository {
         self.outputs.iter().find(|o| o.id == id)
     }
     
-    pub fn find_control_by_id(&self, id: Id) -> Option<&DesignControl> {
-        self.controls.iter().find(|c| c.id == id)
+    pub fn find_verification_by_id(&self, id: Id) -> Option<&Verification> {
+        self.verifications.iter().find(|v| v.id == id)
+    }
+    
+    pub fn search_requirements(&self, query: &str) -> Vec<&Requirement> {
+        self.requirements.iter().filter(|r| r.matches_search(query)).collect()
+    }
+    
+    pub fn search_inputs(&self, query: &str) -> Vec<&DesignInput> {
+        self.inputs.iter().filter(|i| i.matches_search(query)).collect()
+    }
+    
+    pub fn search_outputs(&self, query: &str) -> Vec<&DesignOutput> {
+        self.outputs.iter().filter(|o| o.matches_search(query)).collect()
+    }
+    
+    pub fn search_verifications(&self, query: &str) -> Vec<&Verification> {
+        self.verifications.iter().filter(|v| v.matches_search(query)).collect()
+    }
+    
+    pub fn search_risks(&self, query: &str) -> Vec<&Risk> {
+        self.risks.iter().filter(|r| r.matches_search(query)).collect()
     }
     
     pub fn find_risk_by_id(&self, id: Id) -> Option<&Risk> {
@@ -154,9 +174,9 @@ impl QualityRepository {
     
     pub fn link_input_to_requirement(&mut self, input_id: Id, requirement_id: Id) -> Result<()> {
         if let Some(input) = self.inputs.iter_mut().find(|i| i.id == input_id) {
-            if !input.requirements.contains(&requirement_id) {
-                input.requirements.push(requirement_id);
-                input.updated = chrono::Utc::now();
+            input.add_requirement(requirement_id);
+            if let Some(requirement) = self.requirements.iter_mut().find(|r| r.id == requirement_id) {
+                requirement.add_input(input_id);
             }
             Ok(())
         } else {
@@ -166,25 +186,12 @@ impl QualityRepository {
         }
     }
     
-    pub fn link_output_to_requirement(&mut self, output_id: Id, requirement_id: Id) -> Result<()> {
-        if let Some(output) = self.outputs.iter_mut().find(|o| o.id == output_id) {
-            if !output.requirements.contains(&requirement_id) {
-                output.requirements.push(requirement_id);
-                output.updated = chrono::Utc::now();
-            }
-            Ok(())
-        } else {
-            Err(tessera_core::DesignTrackError::NotFound(
-                format!("Output with id {} not found", output_id)
-            ))
-        }
-    }
     
     pub fn link_output_to_input(&mut self, output_id: Id, input_id: Id) -> Result<()> {
         if let Some(output) = self.outputs.iter_mut().find(|o| o.id == output_id) {
-            if !output.inputs.contains(&input_id) {
-                output.inputs.push(input_id);
-                output.updated = chrono::Utc::now();
+            output.add_input(input_id);
+            if let Some(input) = self.inputs.iter_mut().find(|i| i.id == input_id) {
+                input.add_output(output_id);
             }
             Ok(())
         } else {
@@ -194,16 +201,16 @@ impl QualityRepository {
         }
     }
     
-    pub fn link_control_to_output(&mut self, control_id: Id, output_id: Id) -> Result<()> {
-        if let Some(control) = self.controls.iter_mut().find(|c| c.id == control_id) {
-            if !control.outputs.contains(&output_id) {
-                control.outputs.push(output_id);
-                control.updated = chrono::Utc::now();
+    pub fn link_verification_to_output(&mut self, verification_id: Id, output_id: Id) -> Result<()> {
+        if let Some(verification) = self.verifications.iter_mut().find(|v| v.id == verification_id) {
+            verification.add_output(output_id);
+            if let Some(output) = self.outputs.iter_mut().find(|o| o.id == output_id) {
+                output.add_verification(verification_id);
             }
             Ok(())
         } else {
             Err(tessera_core::DesignTrackError::NotFound(
-                format!("Control with id {} not found", control_id)
+                format!("Verification with id {} not found", verification_id)
             ))
         }
     }
@@ -383,30 +390,30 @@ impl Repository<DesignOutput> for Vec<DesignOutput> {
     }
 }
 
-impl Repository<DesignControl> for Vec<DesignControl> {
-    fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<DesignControl>> {
+impl Repository<Verification> for Vec<Verification> {
+    fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<Verification>> {
         load_items_from_file(path)
     }
     
-    fn save_to_file<P: AsRef<Path>>(items: &[DesignControl], path: P) -> Result<()> {
+    fn save_to_file<P: AsRef<Path>>(items: &[Verification], path: P) -> Result<()> {
         save_items_to_file(items, path)
     }
     
-    fn find_by_id(&self, id: Id) -> Option<&DesignControl> {
+    fn find_by_id(&self, id: Id) -> Option<&Verification> {
         self.iter().find(|item| item.id() == id)
     }
     
-    fn find_by_name(&self, name: &str) -> Option<&DesignControl> {
+    fn find_by_name(&self, name: &str) -> Option<&Verification> {
         self.iter().find(|item| item.name() == name)
     }
     
-    fn add(&mut self, item: DesignControl) -> Result<()> {
+    fn add(&mut self, item: Verification) -> Result<()> {
         item.validate()?;
         self.push(item);
         Ok(())
     }
     
-    fn update(&mut self, item: DesignControl) -> Result<()> {
+    fn update(&mut self, item: Verification) -> Result<()> {
         item.validate()?;
         if let Some(pos) = self.iter().position(|existing| existing.id() == item.id()) {
             self[pos] = item;
@@ -429,7 +436,7 @@ impl Repository<DesignControl> for Vec<DesignControl> {
         }
     }
     
-    fn list(&self) -> &[DesignControl] {
+    fn list(&self) -> &[Verification] {
         self
     }
 }

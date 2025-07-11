@@ -1,4 +1,4 @@
-use crate::data::{Risk, RiskCategory};
+use crate::data::Risk;
 use tessera_core::{Id, Result};
 use rand_distr::{Distribution, Normal};
 use serde::{Deserialize, Serialize};
@@ -118,17 +118,7 @@ impl RiskAnalyzer {
         for risk in risks {
             let analysis = self.analyze_risk(risk)?;
             
-            let category = match &risk.category {
-                RiskCategory::Technical => "Technical",
-                RiskCategory::Schedule => "Schedule",
-                RiskCategory::Cost => "Cost",
-                RiskCategory::Quality => "Quality",
-                RiskCategory::Safety => "Safety",
-                RiskCategory::Regulatory => "Regulatory",
-                RiskCategory::Market => "Market",
-                RiskCategory::Resource => "Resource",
-                RiskCategory::Other(name) => name,
-            };
+            let category = &risk.category;
             
             category_scores.entry(category.to_string())
                 .or_insert_with(Vec::new)
@@ -196,7 +186,7 @@ impl RiskAnalyzer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::{Risk, RiskCategory};
+    use crate::data::Risk;
     
     #[test]
     fn test_risk_analysis() {

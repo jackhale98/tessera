@@ -1,4 +1,4 @@
-use crate::{QualityRepository, TraceabilityMatrix, TraceabilityLink, TraceabilityRelation, SuggestedLink};
+use crate::{QualityRepository, TraceabilityMatrix, SuggestedLink};
 use tessera_core::{Id, Result, DesignTrackError};
 use inquire::{Confirm, CustomType, Select, Text, InquireError, validator::Validation};
 use colored::Colorize;
@@ -79,7 +79,7 @@ impl TraceabilityMenuInterface {
             let req_count = matrix.requirements.len();
             let input_count = matrix.inputs.len();
             let output_count = matrix.outputs.len();
-            let control_count = matrix.controls.len();
+            let verification_count = matrix.verifications.len();
             let risk_count = matrix.risks.len();
             let link_count = matrix.links.len();
 
@@ -88,7 +88,7 @@ impl TraceabilityMenuInterface {
             println!("  Requirements: {}", req_count);
             println!("  Inputs: {}", input_count);
             println!("  Outputs: {}", output_count);
-            println!("  Controls: {}", control_count);
+            println!("  Verifications: {}", verification_count);
             println!("  Risks: {}", risk_count);
             println!("  Total Links: {}", link_count);
         }
@@ -293,9 +293,9 @@ impl TraceabilityMenuInterface {
             entity_choices.push(format!("OUT: {} - {}", output.id, output.name));
         }
 
-        // Add controls
-        for control in repository.get_controls() {
-            entity_choices.push(format!("CTL: {} - {}", control.id, control.name));
+        // Add verifications
+        for verification in repository.get_verifications() {
+            entity_choices.push(format!("VER: {} - {}", verification.id, verification.name));
         }
 
         // Add risks

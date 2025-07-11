@@ -1,6 +1,5 @@
-use tessera_core::{Entity, Id, Link, Linkable, Result};
+use tessera_core::{Entity, Id, Result};
 use chrono::{DateTime, Utc};
-use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -8,32 +7,15 @@ pub struct Requirement {
     pub id: Id,
     pub name: String,
     pub description: String,
-    pub category: RequirementCategory,
+    pub category: String,
     pub priority: Priority,
     pub status: RequirementStatus,
-    pub due_date: Option<DateTime<Utc>>,
     pub acceptance_criteria: Vec<String>,
-    pub risk_score: Option<f64>,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
-    pub links: Vec<Link>,
-    pub traced_to: Vec<Id>,
-    pub traced_from: Vec<Id>,
-    pub metadata: IndexMap<String, String>,
+    pub linked_inputs: Vec<Id>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum RequirementCategory {
-    Functional,
-    Performance,
-    Safety,
-    Regulatory,
-    Usability,
-    Reliability,
-    Maintainability,
-    Environmental,
-    Other(String),
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Priority {
@@ -47,10 +29,8 @@ pub enum Priority {
 pub enum RequirementStatus {
     Draft,
     Approved,
-    Implemented,
     Verified,
-    Failed,
-    Deprecated,
+    Closed,
 }
 
 impl Entity for Requirement {
@@ -77,31 +57,9 @@ impl Entity for Requirement {
     }
 }
 
-impl Linkable for Requirement {
-    fn get_links(&self) -> Vec<Id> {
-        self.links.iter().map(|link| link.target_id).collect()
-    }
-    
-    fn add_link(&mut self, target_id: Id) -> Result<()> {
-        let link = Link::new(target_id, "reference".to_string());
-        self.links.push(link);
-        self.updated = Utc::now();
-        Ok(())
-    }
-    
-    fn remove_link(&mut self, target_id: Id) -> Result<()> {
-        self.links.retain(|link| link.target_id != target_id);
-        self.updated = Utc::now();
-        Ok(())
-    }
-    
-    fn validate_links(&self, _resolver: &dyn tessera_core::LinkResolver) -> Result<()> {
-        Ok(())
-    }
-}
 
 impl Requirement {
-    pub fn new(name: String, description: String, category: RequirementCategory) -> Self {
+    pub fn new(name: String, description: String, category: String) -> Self {
         let now = Utc::now();
         Self {
             id: Id::new(),
@@ -110,16 +68,30 @@ impl Requirement {
             category,
             priority: Priority::Medium,
             status: RequirementStatus::Draft,
-            due_date: None,
             acceptance_criteria: Vec::new(),
-            risk_score: None,
             created: now,
             updated: now,
-            links: Vec::new(),
-            traced_to: Vec::new(),
-            traced_from: Vec::new(),
-            metadata: IndexMap::new(),
+            linked_inputs: Vec::new(),
         }
+    }
+    
+    pub fn add_input(&mut self, input_id: Id) {
+        if !self.linked_inputs.contains(&input_id) {
+            self.linked_inputs.push(input_id);
+            self.updated = Utc::now();
+        }
+    }
+    
+    pub fn remove_input(&mut self, input_id: Id) {
+        self.linked_inputs.retain(|&id| id != input_id);
+        self.updated = Utc::now();
+    }
+    
+    pub fn matches_search(&self, query: &str) -> bool {
+        let query_lower = query.to_lowercase();
+        self.name.to_lowercase().contains(&query_lower) ||
+        self.description.to_lowercase().contains(&query_lower) ||
+        self.category.to_lowercase().contains(&query_lower)
     }
 }
 
@@ -128,24 +100,14 @@ pub struct DesignInput {
     pub id: Id,
     pub name: String,
     pub description: String,
-    pub input_type: InputType,
+    pub input_type: String,
     pub source: String,
     pub requirements: Vec<Id>,
+    pub linked_outputs: Vec<Id>,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
-    pub metadata: IndexMap<String, String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum InputType {
-    Specification,
-    Standard,
-    Regulation,
-    CustomerRequirement,
-    MarketResearch,
-    TechnicalReport,
-    Other(String),
-}
 
 impl Entity for DesignInput {
     fn id(&self) -> Id {
@@ -167,7 +129,7 @@ impl Entity for DesignInput {
 }
 
 impl DesignInput {
-    pub fn new(name: String, description: String, input_type: InputType, source: String) -> Self {
+    pub fn new(name: String, description: String, input_type: String, source: String) -> Self {
         let now = Utc::now();
         Self {
             id: Id::new(),
@@ -176,10 +138,42 @@ impl DesignInput {
             input_type,
             source,
             requirements: Vec::new(),
+            linked_outputs: Vec::new(),
             created: now,
             updated: now,
-            metadata: IndexMap::new(),
         }
+    }
+    
+    pub fn add_requirement(&mut self, req_id: Id) {
+        if !self.requirements.contains(&req_id) {
+            self.requirements.push(req_id);
+            self.updated = Utc::now();
+        }
+    }
+    
+    pub fn remove_requirement(&mut self, req_id: Id) {
+        self.requirements.retain(|&id| id != req_id);
+        self.updated = Utc::now();
+    }
+    
+    pub fn add_output(&mut self, output_id: Id) {
+        if !self.linked_outputs.contains(&output_id) {
+            self.linked_outputs.push(output_id);
+            self.updated = Utc::now();
+        }
+    }
+    
+    pub fn remove_output(&mut self, output_id: Id) {
+        self.linked_outputs.retain(|&id| id != output_id);
+        self.updated = Utc::now();
+    }
+    
+    pub fn matches_search(&self, query: &str) -> bool {
+        let query_lower = query.to_lowercase();
+        self.name.to_lowercase().contains(&query_lower) ||
+        self.description.to_lowercase().contains(&query_lower) ||
+        self.input_type.to_lowercase().contains(&query_lower) ||
+        self.source.to_lowercase().contains(&query_lower)
     }
 }
 
@@ -188,26 +182,14 @@ pub struct DesignOutput {
     pub id: Id,
     pub name: String,
     pub description: String,
-    pub output_type: OutputType,
+    pub output_type: String,
     pub file_path: Option<String>,
-    pub inputs: Vec<Id>,
-    pub requirements: Vec<Id>,
+    pub linked_inputs: Vec<Id>,
+    pub linked_verifications: Vec<Id>,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
-    pub metadata: IndexMap<String, String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum OutputType {
-    Drawing,
-    Calculation,
-    Specification,
-    Report,
-    Model,
-    Prototype,
-    TestPlan,
-    Other(String),
-}
 
 impl Entity for DesignOutput {
     fn id(&self) -> Id {
@@ -229,7 +211,7 @@ impl Entity for DesignOutput {
 }
 
 impl DesignOutput {
-    pub fn new(name: String, description: String, output_type: OutputType) -> Self {
+    pub fn new(name: String, description: String, output_type: String) -> Self {
         let now = Utc::now();
         Self {
             id: Id::new(),
@@ -237,54 +219,70 @@ impl DesignOutput {
             description,
             output_type,
             file_path: None,
-            inputs: Vec::new(),
-            requirements: Vec::new(),
+            linked_inputs: Vec::new(),
+            linked_verifications: Vec::new(),
             created: now,
             updated: now,
-            metadata: IndexMap::new(),
         }
+    }
+    
+    pub fn add_input(&mut self, input_id: Id) {
+        if !self.linked_inputs.contains(&input_id) {
+            self.linked_inputs.push(input_id);
+            self.updated = Utc::now();
+        }
+    }
+    
+    pub fn remove_input(&mut self, input_id: Id) {
+        self.linked_inputs.retain(|&id| id != input_id);
+        self.updated = Utc::now();
+    }
+    
+    pub fn add_verification(&mut self, verification_id: Id) {
+        if !self.linked_verifications.contains(&verification_id) {
+            self.linked_verifications.push(verification_id);
+            self.updated = Utc::now();
+        }
+    }
+    
+    pub fn remove_verification(&mut self, verification_id: Id) {
+        self.linked_verifications.retain(|&id| id != verification_id);
+        self.updated = Utc::now();
+    }
+    
+    pub fn matches_search(&self, query: &str) -> bool {
+        let query_lower = query.to_lowercase();
+        self.name.to_lowercase().contains(&query_lower) ||
+        self.description.to_lowercase().contains(&query_lower) ||
+        self.output_type.to_lowercase().contains(&query_lower)
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DesignControl {
+pub struct Verification {
     pub id: Id,
     pub name: String,
     pub description: String,
-    pub control_type: ControlType,
-    pub frequency: ControlFrequency,
-    pub responsible_party: String,
+    pub verification_type: String,
     pub procedure: String,
-    pub outputs: Vec<Id>,
+    pub responsible_party: String,
+    pub linked_outputs: Vec<Id>,
+    pub status: VerificationStatus,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
-    pub metadata: IndexMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ControlType {
-    Review,
-    Inspection,
-    Test,
-    Verification,
-    Validation,
-    Approval,
-    Other(String),
+pub enum VerificationStatus {
+    Planned,
+    InProgress,
+    Passed,
+    Failed,
+    Deferred,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ControlFrequency {
-    OneTime,
-    PerBatch,
-    Daily,
-    Weekly,
-    Monthly,
-    Quarterly,
-    Annually,
-    AsNeeded,
-}
 
-impl Entity for DesignControl {
+impl Entity for Verification {
     fn id(&self) -> Id {
         self.id
     }
@@ -296,29 +294,49 @@ impl Entity for DesignControl {
     fn validate(&self) -> Result<()> {
         if self.name.is_empty() {
             return Err(tessera_core::DesignTrackError::Validation(
-                "Design control name cannot be empty".to_string()
+                "Verification name cannot be empty".to_string()
             ));
         }
         Ok(())
     }
 }
 
-impl DesignControl {
-    pub fn new(name: String, description: String, control_type: ControlType) -> Self {
+impl Verification {
+    pub fn new(name: String, description: String, verification_type: String) -> Self {
         let now = Utc::now();
         Self {
             id: Id::new(),
             name,
             description,
-            control_type,
-            frequency: ControlFrequency::AsNeeded,
-            responsible_party: String::new(),
+            verification_type,
             procedure: String::new(),
-            outputs: Vec::new(),
+            responsible_party: String::new(),
+            linked_outputs: Vec::new(),
+            status: VerificationStatus::Planned,
             created: now,
             updated: now,
-            metadata: IndexMap::new(),
         }
+    }
+    
+    pub fn add_output(&mut self, output_id: Id) {
+        if !self.linked_outputs.contains(&output_id) {
+            self.linked_outputs.push(output_id);
+            self.updated = Utc::now();
+        }
+    }
+    
+    pub fn remove_output(&mut self, output_id: Id) {
+        self.linked_outputs.retain(|&id| id != output_id);
+        self.updated = Utc::now();
+    }
+    
+    pub fn matches_search(&self, query: &str) -> bool {
+        let query_lower = query.to_lowercase();
+        self.name.to_lowercase().contains(&query_lower) ||
+        self.description.to_lowercase().contains(&query_lower) ||
+        self.verification_type.to_lowercase().contains(&query_lower) ||
+        self.procedure.to_lowercase().contains(&query_lower) ||
+        self.responsible_party.to_lowercase().contains(&query_lower)
     }
 }
 
@@ -327,7 +345,7 @@ pub struct Risk {
     pub id: Id,
     pub name: String,
     pub description: String,
-    pub category: RiskCategory,
+    pub category: String,
     pub probability: f64,
     pub impact: f64,
     pub risk_score: f64,
@@ -336,21 +354,8 @@ pub struct Risk {
     pub owner: String,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
-    pub metadata: IndexMap<String, String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum RiskCategory {
-    Technical,
-    Schedule,
-    Cost,
-    Quality,
-    Safety,
-    Regulatory,
-    Market,
-    Resource,
-    Other(String),
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RiskStatus {
@@ -399,7 +404,7 @@ impl Entity for Risk {
 }
 
 impl Risk {
-    pub fn new(name: String, description: String, category: RiskCategory) -> Self {
+    pub fn new(name: String, description: String, category: String) -> Self {
         let now = Utc::now();
         Self {
             id: Id::new(),
@@ -414,12 +419,19 @@ impl Risk {
             owner: String::new(),
             created: now,
             updated: now,
-            metadata: IndexMap::new(),
         }
     }
     
     pub fn update_risk_score(&mut self) {
         self.risk_score = self.probability * self.impact;
         self.updated = Utc::now();
+    }
+    
+    pub fn matches_search(&self, query: &str) -> bool {
+        let query_lower = query.to_lowercase();
+        self.name.to_lowercase().contains(&query_lower) ||
+        self.description.to_lowercase().contains(&query_lower) ||
+        self.mitigation_strategy.to_lowercase().contains(&query_lower) ||
+        self.owner.to_lowercase().contains(&query_lower)
     }
 }
