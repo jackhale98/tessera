@@ -297,7 +297,7 @@ pub struct DesignOutput {
     pub id: Id,
     pub name: String,
     pub description: String,
-    pub input_id: Id,
+    pub input_ids: Vec<Id>,
     pub output_type: String,
     pub deliverable: String,
     pub location: Option<String>,
@@ -309,11 +309,11 @@ pub struct DesignOutput {
 }
 
 impl DesignOutput {
-    /// Create a new design output linked to a design input
+    /// Create a new design output linked to design inputs
     pub fn new(
         name: String,
         description: String,
-        input_id: Id,
+        input_ids: Vec<Id>,
         output_type: String,
         deliverable: String,
     ) -> Self {
@@ -322,7 +322,7 @@ impl DesignOutput {
             id: Id::new(),
             name,
             description,
-            input_id,
+            input_ids,
             output_type,
             deliverable,
             location: None,
@@ -385,13 +385,13 @@ impl Entity for DesignOutput {
     }
 }
 
-/// Verification activity that validates design outputs
+/// Verification activity that validates design inputs
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Verification {
     pub id: Id,
     pub name: String,
     pub description: String,
-    pub output_id: Id,
+    pub input_ids: Vec<Id>,
     pub verification_type: String,
     pub method: String,
     pub acceptance_criteria: Vec<String>,
@@ -408,7 +408,7 @@ impl Verification {
     pub fn new(
         name: String,
         description: String,
-        output_id: Id,
+        input_ids: Vec<Id>,
         verification_type: String,
         method: String,
     ) -> Self {
@@ -417,7 +417,7 @@ impl Verification {
             id: Id::new(),
             name,
             description,
-            output_id,
+            input_ids,
             verification_type,
             method,
             acceptance_criteria: Vec::new(),
@@ -551,7 +551,7 @@ mod tests {
         );
 
         assert_eq!(input.name, "Test Input");
-        assert_eq!(input.specification, "Test specification");
+        assert_eq!(input.source, "Test specification");
         assert!(input.constraints.is_empty());
     }
 

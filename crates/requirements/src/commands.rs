@@ -220,7 +220,7 @@ impl RequirementsCommands {
         let output_type = Text::new("Output type (e.g., Document, Code, Drawing):").prompt()?;
         let deliverable = Text::new("Deliverable description:").prompt()?;
 
-        let output = DesignOutput::new(name, description, selected_input.id, output_type, deliverable);
+        let output = DesignOutput::new(name, description, vec![selected_input.id], output_type, deliverable);
         self.repository.add_design_output(output)?;
         self.save()?;
 
@@ -241,9 +241,15 @@ impl RequirementsCommands {
         table.set_header(vec!["Name", "Type", "Input", "Status", "Created"]);
 
         for output in outputs {
-            let input_name = self.repository.get_design_input(&output.input_id)
+            let input_names: Vec<String> = output.input_ids.iter()
+                .filter_map(|id| self.repository.get_design_input(id))
                 .map(|i| i.name.clone())
-                .unwrap_or_else(|| "Unknown".to_string());
+                .collect();
+            let input_name = if input_names.is_empty() {
+                "Unknown".to_string()
+            } else {
+                input_names.join(", ")
+            };
                 
             table.add_row(vec![
                 output.name.clone(),
@@ -264,28 +270,28 @@ impl RequirementsCommands {
     pub fn add_verification_interactive(&mut self) -> Result<()> {
         println!("{}", "Adding new verification".bold().blue());
 
-        let outputs = self.repository.get_design_outputs();
-        if outputs.is_empty() {
-            println!("{}", "No design outputs found. Create design outputs first.".yellow());
+        let inputs = self.repository.get_design_inputs();
+        if inputs.is_empty() {
+            println!("{}", "No design inputs found. Create design inputs first.".yellow());
             return Ok(());
         }
 
-        // Select design output
-        let output_options: Vec<String> = outputs.iter()
-            .map(|output| format!("{} - {}", output.name, output.output_type))
+        // Select design input
+        let input_options: Vec<String> = inputs.iter()
+            .map(|input| format!("{} - {}", input.name, input.source))
             .collect();
-        let output_selection = Select::new("Select design output:", output_options).prompt()?;
-        let output_index = outputs.iter()
-            .position(|output| format!("{} - {}", output.name, output.output_type) == output_selection)
+        let input_selection = Select::new("Select design input:", input_options).prompt()?;
+        let input_index = inputs.iter()
+            .position(|input| format!("{} - {}", input.name, input.source) == input_selection)
             .unwrap();
-        let selected_output = outputs.get(output_index).unwrap();
+        let selected_input = inputs.get(input_index).unwrap();
 
         let name = Text::new("Verification name:").prompt()?;
         let description = Text::new("Description:").prompt()?;
         let verification_type = Text::new("Verification type (e.g., Test, Review, Analysis):").prompt()?;
         let method = Text::new("Verification method:").prompt()?;
 
-        let verification = Verification::new(name, description, selected_output.id, verification_type, method);
+        let verification = Verification::new(name, description, vec![selected_input.id], verification_type, method);
         self.repository.add_verification(verification)?;
         self.save()?;
 
@@ -303,19 +309,25 @@ impl RequirementsCommands {
         }
 
         let mut table = Table::new();
-        table.set_header(vec!["Name", "Type", "Method", "Status", "Output", "Created"]);
+        table.set_header(vec!["Name", "Type", "Method", "Status", "Input", "Created"]);
 
         for verification in verifications {
-            let output_name = self.repository.get_design_output(&verification.output_id)
-                .map(|o| o.name.clone())
-                .unwrap_or_else(|| "Unknown".to_string());
+            let input_names: Vec<String> = verification.input_ids.iter()
+                .filter_map(|id| self.repository.get_design_input(id))
+                .map(|i| i.name.clone())
+                .collect();
+            let input_name = if input_names.is_empty() {
+                "Unknown".to_string()
+            } else {
+                input_names.join(", ")
+            };
                 
             table.add_row(vec![
                 verification.name.clone(),
                 verification.verification_type.clone(),
                 verification.method.clone(),
                 verification.status.clone(),
-                output_name,
+                input_name,
                 verification.created.format("%Y-%m-%d").to_string(),
             ]);
         }
@@ -335,7 +347,7 @@ impl RequirementsCommands {
                 name: v.name.clone(),
                 status: v.status.clone(),
                 is_complete: v.is_complete(),
-                output_id: v.output_id,
+                output_id: tessera_core::Id::new(), // deprecated field
             })
     }
 

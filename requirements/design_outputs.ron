@@ -1,1 +1,18 @@
-{}
+{
+    ("3cf75bc2-e1fc-40fa-9df2-0b8f7c177594"): (
+        id: ("3cf75bc2-e1fc-40fa-9df2-0b8f7c177594"),
+        name: "test output2",
+        description: "this is a test output",
+        input_ids: [
+            ("1de9efb1-fe2c-4bc3-876d-51795dfc2d5a"),
+        ],
+        output_type: "drawing",
+        deliverable: "assembly",
+        location: None,
+        version: None,
+        approval_status: "Draft",
+        metadata: {},
+        created: "2025-07-11T19:33:23.955500326Z",
+        updated: "2025-07-11T19:33:23.955500326Z",
+    ),
+}

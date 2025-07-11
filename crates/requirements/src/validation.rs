@@ -351,15 +351,9 @@ pub mod utils {
             
             let mut verification_coverage = false;
             for input in inputs {
-                let outputs = repository.get_design_outputs_for_input(&input.id);
-                for output in outputs {
-                    let verifications = repository.get_verifications_for_output(&output.id);
-                    if !verifications.is_empty() {
-                        verification_coverage = true;
-                        break;
-                    }
-                }
-                if verification_coverage {
+                let verifications = repository.get_verifications_for_input(&input.id);
+                if !verifications.is_empty() {
+                    verification_coverage = true;
                     break;
                 }
             }

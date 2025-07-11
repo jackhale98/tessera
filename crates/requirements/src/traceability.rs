@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 pub struct TraceabilityMatrix {
     pub requirements_to_inputs: HashMap<Id, Vec<Id>>,
     pub inputs_to_outputs: HashMap<Id, Vec<Id>>,
-    pub outputs_to_verifications: HashMap<Id, Vec<Id>>,
+    pub inputs_to_verifications: HashMap<Id, Vec<Id>>,
     pub forward_links: HashMap<Id, HashSet<Id>>,
     pub backward_links: HashMap<Id, HashSet<Id>>,
 }
@@ -25,7 +25,7 @@ impl TraceabilityMatrix {
         Self {
             requirements_to_inputs: HashMap::new(),
             inputs_to_outputs: HashMap::new(),
-            outputs_to_verifications: HashMap::new(),
+            inputs_to_verifications: HashMap::new(),
             forward_links: HashMap::new(),
             backward_links: HashMap::new(),
         }
@@ -55,38 +55,42 @@ impl TraceabilityMatrix {
 
         // Build inputs to outputs mapping
         for output in repository.get_design_outputs() {
-            matrix.inputs_to_outputs
-                .entry(output.input_id)
-                .or_insert_with(Vec::new)
-                .push(output.id);
-                
-            // Add to forward/backward links
-            matrix.forward_links
-                .entry(output.input_id)
-                .or_insert_with(HashSet::new)
-                .insert(output.id);
-            matrix.backward_links
-                .entry(output.id)
-                .or_insert_with(HashSet::new)
-                .insert(output.input_id);
+            for input_id in &output.input_ids {
+                matrix.inputs_to_outputs
+                    .entry(*input_id)
+                    .or_insert_with(Vec::new)
+                    .push(output.id);
+                    
+                // Add to forward/backward links
+                matrix.forward_links
+                    .entry(*input_id)
+                    .or_insert_with(HashSet::new)
+                    .insert(output.id);
+                matrix.backward_links
+                    .entry(output.id)
+                    .or_insert_with(HashSet::new)
+                    .insert(*input_id);
+            }
         }
 
-        // Build outputs to verifications mapping
+        // Build inputs to verifications mapping
         for verification in repository.get_verifications() {
-            matrix.outputs_to_verifications
-                .entry(verification.output_id)
-                .or_insert_with(Vec::new)
-                .push(verification.id);
-                
-            // Add to forward/backward links
-            matrix.forward_links
-                .entry(verification.output_id)
-                .or_insert_with(HashSet::new)
-                .insert(verification.id);
-            matrix.backward_links
-                .entry(verification.id)
-                .or_insert_with(HashSet::new)
-                .insert(verification.output_id);
+            for input_id in &verification.input_ids {
+                matrix.inputs_to_verifications
+                    .entry(*input_id)
+                    .or_insert_with(Vec::new)
+                    .push(verification.id);
+                    
+                // Add to forward/backward links
+                matrix.forward_links
+                    .entry(*input_id)
+                    .or_insert_with(HashSet::new)
+                    .insert(verification.id);
+                matrix.backward_links
+                    .entry(verification.id)
+                    .or_insert_with(HashSet::new)
+                    .insert(*input_id);
+            }
         }
 
         matrix
@@ -116,7 +120,7 @@ impl TraceabilityMatrix {
             for input_id in inputs {
                 if let Some(outputs) = self.inputs_to_outputs.get(input_id) {
                     for output_id in outputs {
-                        if let Some(verifications) = self.outputs_to_verifications.get(output_id) {
+                        if let Some(verifications) = self.inputs_to_verifications.get(input_id) {
                             for verification_id in verifications {
                                 paths.push(TraceabilityPath {
                                     requirement_id: *requirement_id,
@@ -168,9 +172,11 @@ impl TraceabilityMatrix {
             }
         }
 
-        // Find outputs without verifications
+        // Find outputs without verifications (check if any of their linked inputs have verifications)
         for output in repository.get_design_outputs() {
-            if !self.outputs_to_verifications.contains_key(&output.id) {
+            let has_verification = output.input_ids.iter()
+                .any(|input_id| self.inputs_to_verifications.contains_key(input_id));
+            if !has_verification {
                 gaps.outputs_without_verifications.push(output.id);
             }
         }
@@ -187,7 +193,7 @@ impl TraceabilityMatrix {
 
         let requirements_with_inputs = self.requirements_to_inputs.len();
         let inputs_with_outputs = self.inputs_to_outputs.len();
-        let outputs_with_verifications = self.outputs_to_verifications.len();
+        let inputs_with_verifications = self.inputs_to_verifications.len();
 
         let input_coverage = if total_requirements > 0 {
             (requirements_with_inputs as f64 / total_requirements as f64) * 100.0
@@ -201,8 +207,8 @@ impl TraceabilityMatrix {
             0.0
         };
 
-        let verification_coverage = if total_outputs > 0 {
-            (outputs_with_verifications as f64 / total_outputs as f64) * 100.0
+        let verification_coverage = if total_inputs > 0 {
+            (inputs_with_verifications as f64 / total_inputs as f64) * 100.0
         } else {
             0.0
         };
@@ -214,7 +220,7 @@ impl TraceabilityMatrix {
             total_verifications,
             requirements_with_inputs,
             inputs_with_outputs,
-            outputs_with_verifications,
+            inputs_with_verifications,
             input_coverage,
             output_coverage,
             verification_coverage,
@@ -325,7 +331,7 @@ pub struct TraceabilityStatistics {
     pub total_verifications: usize,
     pub requirements_with_inputs: usize,
     pub inputs_with_outputs: usize,
-    pub outputs_with_verifications: usize,
+    pub inputs_with_verifications: usize,
     pub input_coverage: f64,
     pub output_coverage: f64,
     pub verification_coverage: f64,

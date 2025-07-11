@@ -235,7 +235,7 @@ impl RequirementsRepository {
         // Check for dependent design outputs
         let dependent_outputs: Vec<_> = self.design_outputs
             .values()
-            .filter(|output| output.input_id == *id)
+            .filter(|output| output.input_ids.contains(id))
             .collect();
 
         if !dependent_outputs.is_empty() {
@@ -262,11 +262,13 @@ impl RequirementsRepository {
     pub fn add_design_output(&mut self, output: DesignOutput) -> Result<()> {
         output.validate()?;
         
-        // Validate that the linked design input exists
-        if !self.design_inputs.contains_key(&output.input_id) {
-            return Err(tessera_core::DesignTrackError::Validation(
-                "Linked design input does not exist".to_string()
-            ));
+        // Validate that the linked design inputs exist
+        for input_id in &output.input_ids {
+            if !self.design_inputs.contains_key(input_id) {
+                return Err(tessera_core::DesignTrackError::Validation(
+                    "Linked design input does not exist".to_string()
+                ));
+            }
         }
 
         self.design_outputs.insert(output.id, output);
@@ -287,11 +289,13 @@ impl RequirementsRepository {
     pub fn update_design_output(&mut self, output: DesignOutput) -> Result<()> {
         output.validate()?;
         
-        // Validate that the linked design input exists
-        if !self.design_inputs.contains_key(&output.input_id) {
-            return Err(tessera_core::DesignTrackError::Validation(
-                "Linked design input does not exist".to_string()
-            ));
+        // Validate that the linked design inputs exist
+        for input_id in &output.input_ids {
+            if !self.design_inputs.contains_key(input_id) {
+                return Err(tessera_core::DesignTrackError::Validation(
+                    "Linked design input does not exist".to_string()
+                ));
+            }
         }
 
         self.design_outputs.insert(output.id, output);
@@ -303,7 +307,9 @@ impl RequirementsRepository {
         // Check for dependent verifications
         let dependent_verifications: Vec<_> = self.verifications
             .values()
-            .filter(|verification| verification.output_id == *id)
+            .filter(|verification| verification.input_ids.iter().any(|input_id| {
+                self.design_outputs.get(id).map_or(false, |output| output.input_ids.contains(input_id))
+            }))
             .collect();
 
         if !dependent_verifications.is_empty() {
@@ -320,7 +326,7 @@ impl RequirementsRepository {
     pub fn get_design_outputs_for_input(&self, input_id: &Id) -> Vec<&DesignOutput> {
         self.design_outputs
             .values()
-            .filter(|output| output.input_id == *input_id)
+            .filter(|output| output.input_ids.contains(input_id))
             .collect()
     }
 
@@ -330,11 +336,13 @@ impl RequirementsRepository {
     pub fn add_verification(&mut self, verification: Verification) -> Result<()> {
         verification.validate()?;
         
-        // Validate that the linked design output exists
-        if !self.design_outputs.contains_key(&verification.output_id) {
-            return Err(tessera_core::DesignTrackError::Validation(
-                "Linked design output does not exist".to_string()
-            ));
+        // Validate that the linked design inputs exist
+        for input_id in &verification.input_ids {
+            if !self.design_inputs.contains_key(input_id) {
+                return Err(tessera_core::DesignTrackError::Validation(
+                    "Linked design input does not exist".to_string()
+                ));
+            }
         }
 
         self.verifications.insert(verification.id, verification);
@@ -355,11 +363,13 @@ impl RequirementsRepository {
     pub fn update_verification(&mut self, verification: Verification) -> Result<()> {
         verification.validate()?;
         
-        // Validate that the linked design output exists
-        if !self.design_outputs.contains_key(&verification.output_id) {
-            return Err(tessera_core::DesignTrackError::Validation(
-                "Linked design output does not exist".to_string()
-            ));
+        // Validate that the linked design inputs exist
+        for input_id in &verification.input_ids {
+            if !self.design_inputs.contains_key(input_id) {
+                return Err(tessera_core::DesignTrackError::Validation(
+                    "Linked design input does not exist".to_string()
+                ));
+            }
         }
 
         self.verifications.insert(verification.id, verification);
@@ -372,12 +382,25 @@ impl RequirementsRepository {
         Ok(())
     }
 
-    /// Get verifications for a design output
-    pub fn get_verifications_for_output(&self, output_id: &Id) -> Vec<&Verification> {
+    /// Get verifications for a design input
+    pub fn get_verifications_for_input(&self, input_id: &Id) -> Vec<&Verification> {
         self.verifications
             .values()
-            .filter(|verification| verification.output_id == *output_id)
+            .filter(|verification| verification.input_ids.contains(input_id))
             .collect()
+    }
+    
+    /// Get verifications for a design output (through its linked inputs)
+    pub fn get_verifications_for_output(&self, output_id: &Id) -> Vec<&Verification> {
+        if let Some(output) = self.design_outputs.get(output_id) {
+            let mut verifications = Vec::new();
+            for input_id in &output.input_ids {
+                verifications.extend(self.get_verifications_for_input(input_id));
+            }
+            verifications
+        } else {
+            Vec::new()
+        }
     }
 
     // Analytics and reporting
@@ -443,19 +466,23 @@ impl RequirementsRepository {
 
         // Check design outputs reference valid design inputs
         for output in self.design_outputs.values() {
-            if !self.design_inputs.contains_key(&output.input_id) {
-                return Err(tessera_core::DesignTrackError::Validation(
-                    format!("Design output '{}' references non-existent design input", output.name)
-                ));
+            for input_id in &output.input_ids {
+                if !self.design_inputs.contains_key(input_id) {
+                    return Err(tessera_core::DesignTrackError::Validation(
+                        format!("Design output '{}' references non-existent design input", output.name)
+                    ));
+                }
             }
         }
 
-        // Check verifications reference valid design outputs
+        // Check verifications reference valid design inputs
         for verification in self.verifications.values() {
-            if !self.design_outputs.contains_key(&verification.output_id) {
-                return Err(tessera_core::DesignTrackError::Validation(
-                    format!("Verification '{}' references non-existent design output", verification.name)
-                ));
+            for input_id in &verification.input_ids {
+                if !self.design_inputs.contains_key(input_id) {
+                    return Err(tessera_core::DesignTrackError::Validation(
+                        format!("Verification '{}' references non-existent design input", verification.name)
+                    ));
+                }
             }
         }
 

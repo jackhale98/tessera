@@ -1,1 +1,16 @@
-{}
+{
+    ("1de9efb1-fe2c-4bc3-876d-51795dfc2d5a"): (
+        id: ("1de9efb1-fe2c-4bc3-876d-51795dfc2d5a"),
+        name: "testDI",
+        description: "test input 43",
+        requirement_id: ("bd5ccc09-739c-4f46-93b0-22bce9903c9e"),
+        source: "N/A",
+        acceptance_criteria: [],
+        constraints: [],
+        assumptions: [],
+        references: [],
+        metadata: {},
+        created: "2025-07-11T19:31:41.047705324Z",
+        updated: "2025-07-11T19:31:41.047705324Z",
+    ),
+}
