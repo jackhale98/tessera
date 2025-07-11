@@ -151,6 +151,20 @@ async fn add_input_interactive(project_ctx: ProjectContext) -> Result<()> {
         return Ok(());
     }
     
+    // FIRST: Select the requirement this design input implements
+    println!("{}", "Select the requirement this design input implements:".bold().blue());
+    let req_options: Vec<String> = requirements.iter()
+        .map(|r| format!("{} - {} ({})", r.name, truncate_string(&r.description, 40), r.source))
+        .collect();
+    
+    let req_selection = Select::new("Requirement:", req_options.clone()).prompt()?;
+    let req_index = req_options.iter().position(|x| x == &req_selection).unwrap();
+    let selected_requirement = &requirements[req_index];
+    let requirement_id = selected_requirement.id;
+    
+    println!("\n{}", format!("Creating design input for requirement: {}", selected_requirement.name).bold().green());
+    
+    // THEN: Get details about the input
     let name = Text::new("Input name:")
         .prompt()?;
     
@@ -168,17 +182,6 @@ async fn add_input_interactive(project_ctx: ProjectContext) -> Result<()> {
     ];
     
     let input_type = Select::new("Input type:", input_types).prompt()?.to_string();
-    
-    // Automatically prompt to select requirement - this is the new workflow
-    println!("\n{}", "Select the requirement this design input implements:".bold().blue());
-    let req_options: Vec<String> = requirements.iter()
-        .map(|r| format!("{} - {} ({})", r.name, truncate_string(&r.description, 40), r.source))
-        .collect();
-    
-    let req_selection = Select::new("Requirement:", req_options.clone()).prompt()?;
-    let req_index = req_options.iter().position(|x| x == &req_selection).unwrap();
-    let selected_requirement = &requirements[req_index];
-    let requirement_id = selected_requirement.id;
     
     // Get acceptance criteria for this design input
     let add_criteria = Confirm::new("Add acceptance criteria for this design input?")
@@ -229,6 +232,20 @@ async fn add_output_interactive(project_ctx: ProjectContext) -> Result<()> {
         return Ok(());
     }
     
+    // FIRST: Select the design input this output satisfies
+    println!("{}", "Select the design input this output satisfies:".bold().blue());
+    let input_options: Vec<String> = inputs.iter()
+        .map(|i| format!("{} - {} ({})", i.name, truncate_string(&i.description, 40), i.input_type))
+        .collect();
+    
+    let input_selection = Select::new("Design Input:", input_options.clone()).prompt()?;
+    let input_index = input_options.iter().position(|x| x == &input_selection).unwrap();
+    let selected_input = &inputs[input_index];
+    let input_id = selected_input.id;
+    
+    println!("\n{}", format!("Creating design output for input: {}", selected_input.name).bold().green());
+    
+    // THEN: Get details about the output
     let name = Text::new("Output name:")
         .prompt()?;
     
@@ -247,17 +264,6 @@ async fn add_output_interactive(project_ctx: ProjectContext) -> Result<()> {
     ];
     
     let output_type = Select::new("Output type:", output_types).prompt()?.to_string();
-    
-    // Automatically prompt to select design input - this is the new workflow
-    println!("\n{}", "Select the design input this output satisfies:".bold().blue());
-    let input_options: Vec<String> = inputs.iter()
-        .map(|i| format!("{} - {} ({})", i.name, truncate_string(&i.description, 40), i.input_type))
-        .collect();
-    
-    let input_selection = Select::new("Design Input:", input_options.clone()).prompt()?;
-    let input_index = input_options.iter().position(|x| x == &input_selection).unwrap();
-    let selected_input = &inputs[input_index];
-    let input_id = selected_input.id;
     
     // Optional file path for the output
     let file_path = Text::new("File path (optional):")
@@ -294,6 +300,20 @@ async fn add_verification_interactive(project_ctx: ProjectContext) -> Result<()>
         return Ok(());
     }
     
+    // FIRST: Select the design output this verification validates
+    println!("{}", "Select the design output this verification validates:".bold().blue());
+    let output_options: Vec<String> = outputs.iter()
+        .map(|o| format!("{} - {} ({})", o.name, truncate_string(&o.description, 40), o.output_type))
+        .collect();
+    
+    let output_selection = Select::new("Design Output:", output_options.clone()).prompt()?;
+    let output_index = output_options.iter().position(|x| x == &output_selection).unwrap();
+    let selected_output = &outputs[output_index];
+    let output_id = selected_output.id;
+    
+    println!("\n{}", format!("Creating verification for output: {}", selected_output.name).bold().green());
+    
+    // THEN: Get details about the verification
     let name = Text::new("Verification name:")
         .prompt()?;
     
@@ -311,17 +331,6 @@ async fn add_verification_interactive(project_ctx: ProjectContext) -> Result<()>
     ];
     
     let verification_type = Select::new("Verification type:", verification_types).prompt()?.to_string();
-    
-    // Automatically prompt to select design output - this is the new workflow
-    println!("\n{}", "Select the design output this verification validates:".bold().blue());
-    let output_options: Vec<String> = outputs.iter()
-        .map(|o| format!("{} - {} ({})", o.name, truncate_string(&o.description, 40), o.output_type))
-        .collect();
-    
-    let output_selection = Select::new("Design Output:", output_options.clone()).prompt()?;
-    let output_index = output_options.iter().position(|x| x == &output_selection).unwrap();
-    let selected_output = &outputs[output_index];
-    let output_id = selected_output.id;
     
     // Additional verification details
     let procedure = Text::new("Verification procedure:")
@@ -357,15 +366,9 @@ async fn add_risk_interactive(project_ctx: ProjectContext) -> Result<()> {
         .prompt()?;
     
     let risk_categories = vec![
-        "Technical",
-        "Schedule",
-        "Cost",
-        "Quality",
-        "Safety",
-        "Regulatory",
-        "Market",
-        "Resource",
-        "Other",
+        "Design",
+        "Process",
+        "Use",
     ];
     
     let category = Select::new("Risk category:", risk_categories).prompt()?.to_string();
@@ -519,6 +522,7 @@ async fn list_inputs(project_ctx: ProjectContext) -> Result<()> {
         }
     };
     let inputs = repo.get_inputs();
+    let requirements = repo.get_requirements();
     
     if inputs.is_empty() {
         println!("{}", "No design inputs found".yellow());
@@ -528,16 +532,22 @@ async fn list_inputs(project_ctx: ProjectContext) -> Result<()> {
     println!("{}", "Design Inputs".bold().blue());
     
     let mut table = Table::new();
-    table.set_header(vec!["ID", "Name", "Type", "Requirement ID"]);
+    table.set_header(vec!["ID", "Name", "Type", "Requirement"]);
     
     for input in inputs {
         let input_type = &input.input_type;
+        
+        // Find the requirement name
+        let requirement_name = requirements.iter()
+            .find(|r| r.id == input.requirement_id)
+            .map(|r| truncate_string(&r.name, 30))
+            .unwrap_or_else(|| "[Not Found]".to_string());
         
         table.add_row(vec![
             input.id.to_string(),
             truncate_string(&input.name, 25),
             input_type.to_string(),
-            input.requirement_id.to_string(),
+            requirement_name,
         ]);
     }
     
@@ -556,6 +566,7 @@ async fn list_outputs(project_ctx: ProjectContext) -> Result<()> {
         }
     };
     let outputs = repo.get_outputs();
+    let inputs = repo.get_inputs();
     
     if outputs.is_empty() {
         println!("{}", "No design outputs found".yellow());
@@ -565,16 +576,22 @@ async fn list_outputs(project_ctx: ProjectContext) -> Result<()> {
     println!("{}", "Design Outputs".bold().blue());
     
     let mut table = Table::new();
-    table.set_header(vec!["ID", "Name", "Type", "Input ID"]);
+    table.set_header(vec!["ID", "Name", "Type", "Design Input"]);
     
     for output in outputs {
         let output_type = &output.output_type;
+        
+        // Find the input name
+        let input_name = inputs.iter()
+            .find(|i| i.id == output.input_id)
+            .map(|i| truncate_string(&i.name, 30))
+            .unwrap_or_else(|| "[Not Found]".to_string());
         
         table.add_row(vec![
             output.id.to_string(),
             truncate_string(&output.name, 25),
             output_type.to_string(),
-            output.input_id.to_string(),
+            input_name,
         ]);
     }
     
@@ -593,6 +610,7 @@ async fn list_verifications(project_ctx: ProjectContext) -> Result<()> {
         }
     };
     let verifications = repo.get_verifications();
+    let outputs = repo.get_outputs();
     
     if verifications.is_empty() {
         println!("{}", "No verifications found".yellow());
@@ -602,15 +620,21 @@ async fn list_verifications(project_ctx: ProjectContext) -> Result<()> {
     println!("{}", "Verifications".bold().blue());
     
     let mut table = Table::new();
-    table.set_header(vec!["ID", "Name", "Type", "Status", "Output ID"]);
+    table.set_header(vec!["ID", "Name", "Type", "Status", "Design Output"]);
     
     for verification in verifications {
+        // Find the output name
+        let output_name = outputs.iter()
+            .find(|o| o.id == verification.output_id)
+            .map(|o| truncate_string(&o.name, 25))
+            .unwrap_or_else(|| "[Not Found]".to_string());
+        
         table.add_row(vec![
             verification.id.to_string(),
             truncate_string(&verification.name, 25),
             truncate_string(&verification.verification_type, 15),
             format!("{:?}", verification.status),
-            verification.output_id.to_string(),
+            output_name,
         ]);
     }
     
@@ -767,6 +791,7 @@ async fn list_controls(project_ctx: ProjectContext) -> Result<()> {
         }
     };
     let controls = repo.get_controls();
+    let risks = repo.get_risks();
     
     if controls.is_empty() {
         println!("{}", "No design controls found".yellow());
@@ -776,14 +801,20 @@ async fn list_controls(project_ctx: ProjectContext) -> Result<()> {
     println!("{}", "Design Controls".bold().blue());
     
     let mut table = Table::new();
-    table.set_header(vec!["ID", "Name", "Type", "Risk ID", "Implementation"]);
+    table.set_header(vec!["ID", "Name", "Type", "Risk", "Implementation"]);
     
     for control in controls {
+        // Find the risk name
+        let risk_name = risks.iter()
+            .find(|r| r.id == control.risk_id)
+            .map(|r| truncate_string(&r.name, 25))
+            .unwrap_or_else(|| "[Not Found]".to_string());
+        
         table.add_row(vec![
             control.id.to_string(),
             truncate_string(&control.name, 25),
             control.control_type.to_string(),
-            control.risk_id.to_string(),
+            risk_name,
             truncate_string(&control.implementation, 30),
         ]);
     }

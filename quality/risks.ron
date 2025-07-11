@@ -1,1 +1,20 @@
-[]
+[
+    (
+        id: ("a9f1bf43-db96-44c5-807b-92d4b76a11a5"),
+        name: "new risk",
+        description: "this is a new risk",
+        category: "Safety",
+        failure_mode: "",
+        cause_of_failure: "",
+        effect_of_failure: "",
+        reference: None,
+        probability: 2,
+        impact: 2,
+        risk_score: 0.0625,
+        mitigation_strategy: "",
+        status: Identified,
+        owner: "",
+        created: "2025-07-11T02:33:13.835423397Z",
+        updated: "2025-07-11T02:33:13.835455551Z",
+    ),
+]

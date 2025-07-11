@@ -1,1 +1,13 @@
-[]
+[
+    (
+        id: ("af405785-1397-47d1-bedd-960ae9e16161"),
+        name: "cont1",
+        description: "new design control",
+        control_type: "Engineering",
+        implementation: "DCO 1000",
+        risk_id: ("a9f1bf43-db96-44c5-807b-92d4b76a11a5"),
+        status: Planned,
+        created: "2025-07-11T02:35:33.934124404Z",
+        updated: "2025-07-11T02:35:33.934124404Z",
+    ),
+]
