@@ -1,0 +1,24 @@
+[
+    (
+        id: ("031de9b9-8e76-454c-95bb-3078f21a0e6e"),
+        name: "default",
+        description: Some("work cal"),
+        holidays: [],
+        working_days: [
+            "Mon",
+            "Tue",
+            "Wed",
+            "Thu",
+            "Fri",
+        ],
+        working_hours: (
+            start_time: 9,
+            end_time: 17,
+            daily_hours: 8.0,
+        ),
+        exceptions: [],
+        created: "2025-07-11T23:06:45.969980075Z",
+        updated: "2025-07-11T23:06:45.969980075Z",
+        metadata: {},
+    ),
+]

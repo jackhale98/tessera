@@ -1,0 +1,76 @@
+[
+    (
+        id: ("ab7b7f5c-cf92-411c-967d-8ca01bf8ee67"),
+        name: "baseline1",
+        description: Some("test first baseline"),
+        created_date: "2025-07-11T23:04:40.790350501Z",
+        created_by: "Jack",
+        is_current: false,
+        baseline_type: Initial,
+        project_snapshot: (
+            project_name: "Test Project",
+            start_date: "2025-07-11",
+            end_date: "2025-07-11",
+            total_cost: 0.0,
+            total_effort_hours: 0.0,
+            tasks: {},
+            milestones: {
+                ("4248b2e8-f637-47c5-b560-846e064d35f9"): (
+                    id: ("4248b2e8-f637-47c5-b560-846e064d35f9"),
+                    name: "Project end",
+                    target_date: "2025-07-18",
+                    dependencies: [],
+                ),
+            },
+            resources: {
+                ("99ce444c-2771-4e1b-ac46-1a906ba27d61"): (
+                    id: ("99ce444c-2771-4e1b-ac46-1a906ba27d61"),
+                    name: "Jack",
+                    hourly_rate: 201.0,
+                    total_allocated_hours: 0.0,
+                    total_cost: 0.0,
+                ),
+            },
+        ),
+        created: "2025-07-11T23:04:40.790350501Z",
+        updated: "2025-07-11T23:04:40.790350501Z",
+        metadata: {},
+    ),
+    (
+        id: ("088f2a7d-2658-4820-9ccc-c67a026ffd3a"),
+        name: "baseline2",
+        description: Some("testing comparison"),
+        created_date: "2025-07-11T23:05:53.458883175Z",
+        created_by: "Jack",
+        is_current: false,
+        baseline_type: Initial,
+        project_snapshot: (
+            project_name: "Test Project",
+            start_date: "2025-07-11",
+            end_date: "2025-07-11",
+            total_cost: 0.0,
+            total_effort_hours: 0.0,
+            tasks: {},
+            milestones: {
+                ("4248b2e8-f637-47c5-b560-846e064d35f9"): (
+                    id: ("4248b2e8-f637-47c5-b560-846e064d35f9"),
+                    name: "Project end",
+                    target_date: "2025-07-18",
+                    dependencies: [],
+                ),
+            },
+            resources: {
+                ("99ce444c-2771-4e1b-ac46-1a906ba27d61"): (
+                    id: ("99ce444c-2771-4e1b-ac46-1a906ba27d61"),
+                    name: "Jack",
+                    hourly_rate: 201.0,
+                    total_allocated_hours: 0.0,
+                    total_cost: 0.0,
+                ),
+            },
+        ),
+        created: "2025-07-11T23:05:53.458883175Z",
+        updated: "2025-07-11T23:05:53.458883175Z",
+        metadata: {},
+    ),
+]

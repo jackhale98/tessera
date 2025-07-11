@@ -9,7 +9,7 @@
         task_type: FixedDuration,
         estimated_hours: 8.0,
         actual_hours: 0.0,
-        duration_days: Some(5.0),
+        duration_days: Some(7.0),
         work_units: None,
         start_date: None,
         due_date: None,
@@ -27,7 +27,7 @@
         progress_percentage: 0.0,
         notes: None,
         created: "2025-07-11T22:25:41.003920864Z",
-        updated: "2025-07-11T22:27:12.741610319Z",
+        updated: "2025-07-11T23:05:03.918535170Z",
         metadata: {},
     ),
 ]

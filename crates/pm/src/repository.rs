@@ -7,6 +7,10 @@ pub struct ProjectRepository {
     resources: Vec<Resource>,
     milestones: Vec<Milestone>,
     schedules: Vec<ProjectSchedule>,
+    risks: Vec<crate::risk::ProjectRisk>,
+    issues: Vec<crate::issue::Issue>,
+    baselines: Vec<crate::baseline::ProjectBaseline>,
+    calendars: Vec<crate::calendar::Calendar>,
 }
 
 impl ProjectRepository {
@@ -16,6 +20,10 @@ impl ProjectRepository {
             resources: Vec::new(),
             milestones: Vec::new(),
             schedules: Vec::new(),
+            risks: Vec::new(),
+            issues: Vec::new(),
+            baselines: Vec::new(),
+            calendars: Vec::new(),
         }
     }
     
@@ -43,6 +51,26 @@ impl ProjectRepository {
             repo.schedules = load_items_from_file(&schedules_file)?;
         }
         
+        let risks_file = dir.join("pm_risks.ron");
+        if risks_file.exists() {
+            repo.risks = load_items_from_file(&risks_file)?;
+        }
+        
+        let issues_file = dir.join("issues.ron");
+        if issues_file.exists() {
+            repo.issues = load_items_from_file(&issues_file)?;
+        }
+        
+        let baselines_file = dir.join("baselines.ron");
+        if baselines_file.exists() {
+            repo.baselines = load_items_from_file(&baselines_file)?;
+        }
+        
+        let calendars_file = dir.join("calendars.ron");
+        if calendars_file.exists() {
+            repo.calendars = load_items_from_file(&calendars_file)?;
+        }
+        
         Ok(repo)
     }
     
@@ -54,6 +82,10 @@ impl ProjectRepository {
         save_items_to_file(&self.resources, dir.join("resources.ron"))?;
         save_items_to_file(&self.milestones, dir.join("milestones.ron"))?;
         save_items_to_file(&self.schedules, dir.join("schedules.ron"))?;
+        save_items_to_file(&self.risks, dir.join("pm_risks.ron"))?;
+        save_items_to_file(&self.issues, dir.join("issues.ron"))?;
+        save_items_to_file(&self.baselines, dir.join("baselines.ron"))?;
+        save_items_to_file(&self.calendars, dir.join("calendars.ron"))?;
         
         Ok(())
     }
@@ -199,6 +231,154 @@ impl ProjectRepository {
     
     pub fn get_all_schedules(&self) -> &[ProjectSchedule] {
         &self.schedules
+    }
+    
+    // Risk methods
+    pub fn add_risk(&mut self, risk: crate::risk::ProjectRisk) -> Result<()> {
+        risk.validate()?;
+        self.risks.push(risk);
+        Ok(())
+    }
+    
+    pub fn get_risks(&self) -> &[crate::risk::ProjectRisk] {
+        &self.risks
+    }
+    
+    pub fn find_risk_by_id(&self, id: Id) -> Option<&crate::risk::ProjectRisk> {
+        self.risks.iter().find(|r| r.id == id)
+    }
+    
+    pub fn update_risk(&mut self, updated: crate::risk::ProjectRisk) -> Result<()> {
+        if let Some(risk) = self.risks.iter_mut().find(|r| r.id == updated.id) {
+            *risk = updated;
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Risk with id {} not found", updated.id)
+            ))
+        }
+    }
+    
+    pub fn remove_risk(&mut self, id: Id) -> Result<()> {
+        if let Some(pos) = self.risks.iter().position(|r| r.id == id) {
+            self.risks.remove(pos);
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Risk with id {} not found", id)
+            ))
+        }
+    }
+    
+    // Issue methods
+    pub fn add_issue(&mut self, issue: crate::issue::Issue) -> Result<()> {
+        issue.validate()?;
+        self.issues.push(issue);
+        Ok(())
+    }
+    
+    pub fn get_issues(&self) -> &[crate::issue::Issue] {
+        &self.issues
+    }
+    
+    pub fn find_issue_by_id(&self, id: Id) -> Option<&crate::issue::Issue> {
+        self.issues.iter().find(|i| i.id == id)
+    }
+    
+    pub fn update_issue(&mut self, updated: crate::issue::Issue) -> Result<()> {
+        if let Some(issue) = self.issues.iter_mut().find(|i| i.id == updated.id) {
+            *issue = updated;
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Issue with id {} not found", updated.id)
+            ))
+        }
+    }
+    
+    pub fn remove_issue(&mut self, id: Id) -> Result<()> {
+        if let Some(pos) = self.issues.iter().position(|i| i.id == id) {
+            self.issues.remove(pos);
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Issue with id {} not found", id)
+            ))
+        }
+    }
+    
+    // Baseline methods
+    pub fn add_baseline(&mut self, baseline: crate::baseline::ProjectBaseline) -> Result<()> {
+        baseline.validate()?;
+        self.baselines.push(baseline);
+        Ok(())
+    }
+    
+    pub fn get_baselines(&self) -> &[crate::baseline::ProjectBaseline] {
+        &self.baselines
+    }
+    
+    pub fn find_baseline_by_id(&self, id: Id) -> Option<&crate::baseline::ProjectBaseline> {
+        self.baselines.iter().find(|b| b.id == id)
+    }
+    
+    pub fn update_baseline(&mut self, updated: crate::baseline::ProjectBaseline) -> Result<()> {
+        if let Some(baseline) = self.baselines.iter_mut().find(|b| b.id == updated.id) {
+            *baseline = updated;
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Baseline with id {} not found", updated.id)
+            ))
+        }
+    }
+    
+    pub fn remove_baseline(&mut self, id: Id) -> Result<()> {
+        if let Some(pos) = self.baselines.iter().position(|b| b.id == id) {
+            self.baselines.remove(pos);
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Baseline with id {} not found", id)
+            ))
+        }
+    }
+    
+    // Calendar methods
+    pub fn add_calendar(&mut self, calendar: crate::calendar::Calendar) -> Result<()> {
+        calendar.validate()?;
+        self.calendars.push(calendar);
+        Ok(())
+    }
+    
+    pub fn get_calendars(&self) -> &[crate::calendar::Calendar] {
+        &self.calendars
+    }
+    
+    pub fn find_calendar_by_id(&self, id: Id) -> Option<&crate::calendar::Calendar> {
+        self.calendars.iter().find(|c| c.id == id)
+    }
+    
+    pub fn update_calendar(&mut self, updated: crate::calendar::Calendar) -> Result<()> {
+        if let Some(calendar) = self.calendars.iter_mut().find(|c| c.id == updated.id) {
+            *calendar = updated;
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Calendar with id {} not found", updated.id)
+            ))
+        }
+    }
+    
+    pub fn remove_calendar(&mut self, id: Id) -> Result<()> {
+        if let Some(pos) = self.calendars.iter().position(|c| c.id == id) {
+            self.calendars.remove(pos);
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Calendar with id {} not found", id)
+            ))
+        }
     }
     
     // Analysis methods
