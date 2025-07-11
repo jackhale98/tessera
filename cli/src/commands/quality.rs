@@ -843,61 +843,94 @@ async fn edit_requirement_interactive(project_ctx: ProjectContext) -> Result<()>
     let req_index = req_options.iter().position(|x| x == &req_selection).unwrap();
     let mut requirement = requirements[req_index].clone();
     
-    // Edit fields
-    let new_name = Text::new("Name:")
-        .with_default(&requirement.name)
-        .prompt()?;
-    
-    let new_description = Text::new("Description:")
-        .with_default(&requirement.description)
-        .prompt()?;
-    
-    let new_source = Text::new("Source:")
-        .with_default(&requirement.source)
-        .prompt()?;
-    
-    let categories = vec![
-        "Functional", "Performance", "Safety", "Regulatory",
-        "Usability", "Reliability", "Maintainability", "Environmental", "Other",
-    ];
-    
-    let category_index = categories.iter().position(|&c| c == requirement.category).unwrap_or(0);
-    let new_category = Select::new("Category:", categories)
-        .with_starting_cursor(category_index)
-        .prompt()?.to_string();
-    
-    let priority_names = vec!["Critical", "High", "Medium", "Low"];
-    let current_priority_index = match requirement.priority {
-        Priority::Critical => 0,
-        Priority::High => 1,
-        Priority::Medium => 2,
-        Priority::Low => 3,
-    };
-    
-    let priority_str = Select::new("Priority:", priority_names)
-        .with_starting_cursor(current_priority_index)
-        .prompt()?;
-    let new_priority = match priority_str {
-        "Critical" => Priority::Critical,
-        "High" => Priority::High,
-        "Medium" => Priority::Medium,
-        "Low" => Priority::Low,
-        _ => Priority::Medium,
-    };
-    
-    // Update requirement
-    requirement.name = new_name;
-    requirement.description = new_description;
-    requirement.source = new_source;
-    requirement.category = new_category;
-    requirement.priority = new_priority;
-    requirement.update_timestamp();
-    
-    let mut repo = QualityRepository::load_from_directory(&quality_dir)?;
-    repo.update_requirement(requirement.clone())?;
-    repo.save_to_directory(&quality_dir)?;
-    
-    println!("{} Requirement '{}' updated successfully!", "✓".green(), requirement.name);
+    // Show current values and let user choose what to edit
+    loop {
+        println!("\n{}", format!("Editing requirement: {}", requirement.name).bold().green());
+        println!("Current values:");
+        println!("  Name: {}", requirement.name);
+        println!("  Description: {}", requirement.description);
+        println!("  Source: {}", requirement.source);
+        println!("  Category: {}", requirement.category);
+        println!("  Priority: {:?}", requirement.priority);
+        
+        let field_options = vec![
+            "📝 Name",
+            "📄 Description", 
+            "📍 Source",
+            "📂 Category",
+            "⚡ Priority",
+            "💾 Save Changes",
+            "❌ Cancel",
+        ];
+        
+        let field_selection = Select::new("Select field to edit:", field_options)
+            .with_help_message("Choose which field to modify")
+            .prompt()?;
+        
+        match field_selection {
+            "📝 Name" => {
+                let new_name = Text::new("Name:")
+                    .with_default(&requirement.name)
+                    .prompt()?;
+                requirement.name = new_name;
+            },
+            "📄 Description" => {
+                let new_description = Text::new("Description:")
+                    .with_default(&requirement.description)
+                    .prompt()?;
+                requirement.description = new_description;
+            },
+            "📍 Source" => {
+                let new_source = Text::new("Source:")
+                    .with_default(&requirement.source)
+                    .prompt()?;
+                requirement.source = new_source;
+            },
+            "📂 Category" => {
+                let categories = vec![
+                    "Functional", "Performance", "Safety", "Regulatory",
+                    "Usability", "Reliability", "Maintainability", "Environmental", "Other",
+                ];
+                let category_index = categories.iter().position(|&c| c == requirement.category).unwrap_or(0);
+                let new_category = Select::new("Category:", categories)
+                    .with_starting_cursor(category_index)
+                    .prompt()?.to_string();
+                requirement.category = new_category;
+            },
+            "⚡ Priority" => {
+                let priority_names = vec!["Critical", "High", "Medium", "Low"];
+                let current_priority_index = match requirement.priority {
+                    Priority::Critical => 0,
+                    Priority::High => 1,
+                    Priority::Medium => 2,
+                    Priority::Low => 3,
+                };
+                let priority_str = Select::new("Priority:", priority_names)
+                    .with_starting_cursor(current_priority_index)
+                    .prompt()?;
+                requirement.priority = match priority_str {
+                    "Critical" => Priority::Critical,
+                    "High" => Priority::High,
+                    "Medium" => Priority::Medium,
+                    "Low" => Priority::Low,
+                    _ => Priority::Medium,
+                };
+            },
+            "💾 Save Changes" => {
+                requirement.update_timestamp();
+                let mut repo = QualityRepository::load_from_directory(&quality_dir)?;
+                repo.update_requirement(requirement.clone())?;
+                repo.save_to_directory(&quality_dir)?;
+                println!("{} Requirement '{}' updated successfully!", "✓".green(), requirement.name);
+                break;
+            },
+            "❌ Cancel" => {
+                println!("{} Edit cancelled", "ℹ".blue());
+                break;
+            },
+            _ => {}
+        }
+    }
     
     Ok(())
 }
@@ -923,7 +956,153 @@ async fn edit_control_interactive(_project_ctx: ProjectContext) -> Result<()> {
     Ok(())
 }
 
-async fn edit_risk_interactive(_project_ctx: ProjectContext) -> Result<()> {
-    println!("{}", "Edit functionality for risks coming soon...".yellow());
+async fn edit_risk_interactive(project_ctx: ProjectContext) -> Result<()> {
+    println!("{}", "Editing risk".bold().blue());
+    
+    let quality_dir = project_ctx.module_path("quality");
+    let repo = QualityRepository::load_from_directory(&quality_dir)?;
+    let risks = repo.get_risks();
+    
+    if risks.is_empty() {
+        println!("{}", "No risks found to edit".yellow());
+        return Ok(());
+    }
+    
+    // Select risk to edit
+    let risk_options: Vec<String> = risks.iter()
+        .map(|r| format!("{} - {} (Score: {:.3})", r.name, truncate_string(&r.description, 40), r.risk_score))
+        .collect();
+    
+    let risk_selection = Select::new("Select risk to edit:", risk_options.clone()).prompt()?;
+    let risk_index = risk_options.iter().position(|x| x == &risk_selection).unwrap();
+    let mut risk = risks[risk_index].clone();
+    
+    // Get risk scoring configuration
+    let prob_config = &project_ctx.metadata.quality_settings.risk_probability_range;
+    let impact_config = &project_ctx.metadata.quality_settings.risk_impact_range;
+    let risk_thresholds = &project_ctx.metadata.quality_settings.risk_tolerance_thresholds;
+    
+    // Show current values and let user choose what to edit
+    loop {
+        println!("\n{}", format!("Editing risk: {}", risk.name).bold().green());
+        println!("Current values:");
+        println!("  Name: {}", risk.name);
+        println!("  Description: {}", risk.description);
+        println!("  Category: {}", risk.category);
+        println!("  Probability: {}", risk.probability);
+        println!("  Impact: {}", risk.impact);
+        println!("  Risk Score: {:.3}", risk.risk_score);
+        println!("  Failure Mode: {}", risk.failure_mode);
+        println!("  Cause of Failure: {}", risk.cause_of_failure);
+        println!("  Effect of Failure: {}", risk.effect_of_failure);
+        println!("  Mitigation Strategy: {}", risk.mitigation_strategy);
+        println!("  Owner: {}", risk.owner);
+        
+        let field_options = vec![
+            "📝 Name",
+            "📄 Description",
+            "📂 Category",
+            "📊 Probability",
+            "💥 Impact",
+            "⚠️  Failure Mode",
+            "🔍 Cause of Failure",
+            "💥 Effect of Failure",
+            "🛡️  Mitigation Strategy",
+            "👤 Owner",
+            "💾 Save Changes",
+            "❌ Cancel",
+        ];
+        
+        let field_selection = Select::new("Select field to edit:", field_options)
+            .with_help_message("Choose which field to modify")
+            .prompt()?;
+        
+        match field_selection {
+            "📝 Name" => {
+                let new_name = Text::new("Name:")
+                    .with_default(&risk.name)
+                    .prompt()?;
+                risk.name = new_name;
+            },
+            "📄 Description" => {
+                let new_description = Text::new("Description:")
+                    .with_default(&risk.description)
+                    .prompt()?;
+                risk.description = new_description;
+            },
+            "📂 Category" => {
+                let categories = vec!["Design", "Process", "Use"];
+                let category_index = categories.iter().position(|&c| c == risk.category).unwrap_or(0);
+                let new_category = Select::new("Category:", categories)
+                    .with_starting_cursor(category_index)
+                    .prompt()?.to_string();
+                risk.category = new_category;
+            },
+            "📊 Probability" => {
+                let prob_values = prob_config.values();
+                let probability_str = Text::new(&format!("Probability [values available: {:?}]:", prob_values))
+                    .with_default(&risk.probability.to_string())
+                    .prompt()?;
+                risk.probability = probability_str.parse().unwrap_or(risk.probability);
+                risk.update_risk_score(prob_config, impact_config);
+            },
+            "💥 Impact" => {
+                let impact_values = impact_config.values();
+                let impact_str = Text::new(&format!("Impact [values available: {:?}]:", impact_values))
+                    .with_default(&risk.impact.to_string())
+                    .prompt()?;
+                risk.impact = impact_str.parse().unwrap_or(risk.impact);
+                risk.update_risk_score(prob_config, impact_config);
+            },
+            "⚠️  Failure Mode" => {
+                let new_failure_mode = Text::new("Failure Mode:")
+                    .with_default(&risk.failure_mode)
+                    .prompt()?;
+                risk.failure_mode = new_failure_mode;
+            },
+            "🔍 Cause of Failure" => {
+                let new_cause = Text::new("Cause of Failure:")
+                    .with_default(&risk.cause_of_failure)
+                    .prompt()?;
+                risk.cause_of_failure = new_cause;
+            },
+            "💥 Effect of Failure" => {
+                let new_effect = Text::new("Effect of Failure:")
+                    .with_default(&risk.effect_of_failure)
+                    .prompt()?;
+                risk.effect_of_failure = new_effect;
+            },
+            "🛡️  Mitigation Strategy" => {
+                let new_mitigation = Text::new("Mitigation Strategy:")
+                    .with_default(&risk.mitigation_strategy)
+                    .prompt()?;
+                risk.mitigation_strategy = new_mitigation;
+            },
+            "👤 Owner" => {
+                let new_owner = Text::new("Owner:")
+                    .with_default(&risk.owner)
+                    .prompt()?;
+                risk.owner = new_owner;
+            },
+            "💾 Save Changes" => {
+                risk.update_timestamp();
+                let risk_category = risk_thresholds.categorize_risk(risk.risk_score);
+                
+                let mut repo = QualityRepository::load_from_directory(&quality_dir)?;
+                repo.update_risk(risk.clone())?;
+                repo.save_to_directory(&quality_dir)?;
+                
+                println!("{} Risk '{}' updated successfully!", "✓".green(), risk.name);
+                println!("Risk Score: {:.3} ({})", risk.risk_score, risk_category);
+                break;
+            },
+            "❌ Cancel" => {
+                println!("{} Edit cancelled", "ℹ".blue());
+                break;
+            },
+            _ => {}
+        }
+    }
+    
     Ok(())
 }

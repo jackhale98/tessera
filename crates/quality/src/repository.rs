@@ -198,6 +198,66 @@ impl QualityRepository {
         }
     }
     
+    pub fn update_input(&mut self, updated: DesignInput) -> Result<()> {
+        updated.validate()?;
+        if let Some(pos) = self.inputs.iter().position(|i| i.id == updated.id) {
+            self.inputs[pos] = updated;
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Design input with id {} not found", updated.id)
+            ))
+        }
+    }
+    
+    pub fn update_output(&mut self, updated: DesignOutput) -> Result<()> {
+        updated.validate()?;
+        if let Some(pos) = self.outputs.iter().position(|o| o.id == updated.id) {
+            self.outputs[pos] = updated;
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Design output with id {} not found", updated.id)
+            ))
+        }
+    }
+    
+    pub fn update_verification(&mut self, updated: Verification) -> Result<()> {
+        updated.validate()?;
+        if let Some(pos) = self.verifications.iter().position(|v| v.id == updated.id) {
+            self.verifications[pos] = updated;
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Verification with id {} not found", updated.id)
+            ))
+        }
+    }
+    
+    pub fn update_risk(&mut self, updated: Risk) -> Result<()> {
+        updated.validate()?;
+        if let Some(pos) = self.risks.iter().position(|r| r.id == updated.id) {
+            self.risks[pos] = updated;
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Risk with id {} not found", updated.id)
+            ))
+        }
+    }
+    
+    pub fn update_control(&mut self, updated: DesignControl) -> Result<()> {
+        updated.validate()?;
+        if let Some(pos) = self.controls.iter().position(|c| c.id == updated.id) {
+            self.controls[pos] = updated;
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Design control with id {} not found", updated.id)
+            ))
+        }
+    }
+    
     // Note: Direct linking methods removed in favor of automatic workflow
     // New workflow: Inputs select requirements, Outputs select inputs, Verifications select outputs
     // This eliminates complex bidirectional linking in favor of simple direct references

@@ -3,7 +3,7 @@
         id: ("a9f1bf43-db96-44c5-807b-92d4b76a11a5"),
         name: "new risk",
         description: "this is a new risk",
-        category: "Safety",
+        category: "Design",
         failure_mode: "",
         cause_of_failure: "",
         effect_of_failure: "",
@@ -15,6 +15,6 @@
         status: Identified,
         owner: "",
         created: "2025-07-11T02:33:13.835423397Z",
-        updated: "2025-07-11T02:33:13.835455551Z",
+        updated: "2025-07-11T03:26:34.354779076Z",
     ),
 ]

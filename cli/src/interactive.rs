@@ -3,8 +3,8 @@ use crate::commands::pm::execute_pm_command;
 use crate::commands::tol::execute_tol_command;
 use crate::{QualityCommands, PmCommands, TolCommands};
 use colored::Colorize;
-use tessera_core::{ProjectContext, Result};
-use inquire::Select;
+use tessera_core::{ProjectContext, Result, RiskScoringConfig};
+use inquire::{Select, Text, Confirm};
 
 pub async fn run_interactive_mode(mut project_ctx: ProjectContext, module: Option<String>) -> Result<()> {
     println!("{}", "Welcome to Tessera Interactive Mode".bold().blue());
@@ -79,6 +79,7 @@ async fn run_quality_interactive(project_ctx: ProjectContext) -> Result<()> {
         let options = vec![
             "📋 Manage Entities",
             "📊 Analysis Tools",
+            "⚙️  Settings",
             "📈 Dashboard",
             "← Back to Main Menu",
         ];
@@ -93,6 +94,9 @@ async fn run_quality_interactive(project_ctx: ProjectContext) -> Result<()> {
             },
             "📊 Analysis Tools" => {
                 run_quality_analysis_menu(project_ctx.clone()).await
+            },
+            "⚙️  Settings" => {
+                run_quality_settings_menu(project_ctx.clone()).await
             },
             "📈 Dashboard" => {
                 execute_quality_command(QualityCommands::Dashboard, project_ctx.clone()).await
@@ -206,6 +210,191 @@ async fn run_entity_actions_menu(entity_type: &str, actions: &[(&str, QualityCom
             break;
         }
     }
+    
+    Ok(())
+}
+
+async fn run_quality_settings_menu(mut project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Quality Management - Settings".bold().blue());
+        
+        let options = vec![
+            "📊 Risk Scoring Configuration",
+            "🎯 Risk Tolerance Thresholds", 
+            "📋 View Current Settings",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select setting to configure:", options)
+            .with_help_message("Choose settings to modify")
+            .prompt()?;
+        
+        let result = match selection {
+            "📊 Risk Scoring Configuration" => {
+                configure_risk_scoring(&mut project_ctx).await
+            },
+            "🎯 Risk Tolerance Thresholds" => {
+                configure_risk_thresholds(&mut project_ctx).await
+            },
+            "📋 View Current Settings" => {
+                view_current_settings(&project_ctx).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+async fn configure_risk_scoring(project_ctx: &mut ProjectContext) -> Result<()> {
+    println!("\n{}", "Risk Scoring Configuration".bold().blue());
+    
+    let configure_prob = Confirm::new("Configure probability range?")
+        .with_default(true)
+        .prompt()?;
+    
+    if configure_prob {
+        println!("\n{}", "Probability Range Configuration".bold());
+        println!("Current: [{}, {}, {}]", 
+            project_ctx.metadata.quality_settings.risk_probability_range.range[0],
+            project_ctx.metadata.quality_settings.risk_probability_range.range[1],
+            project_ctx.metadata.quality_settings.risk_probability_range.range[2]);
+        
+        let start: i32 = Text::new("Start value:")
+            .with_default(&project_ctx.metadata.quality_settings.risk_probability_range.range[0].to_string())
+            .prompt()?
+            .parse()
+            .unwrap_or(1);
+        
+        let end: i32 = Text::new("End value:")
+            .with_default(&project_ctx.metadata.quality_settings.risk_probability_range.range[1].to_string())
+            .prompt()?
+            .parse()
+            .unwrap_or(5);
+        
+        let step: i32 = Text::new("Step size:")
+            .with_default(&project_ctx.metadata.quality_settings.risk_probability_range.range[2].to_string())
+            .prompt()?
+            .parse()
+            .unwrap_or(1);
+        
+        project_ctx.metadata.quality_settings.risk_probability_range = RiskScoringConfig::new(start, end, step);
+        println!("{} Probability range updated to: [{}, {}, {}]", "✓".green(), start, end, step);
+    }
+    
+    let configure_impact = Confirm::new("Configure impact range?")
+        .with_default(true)
+        .prompt()?;
+    
+    if configure_impact {
+        println!("\n{}", "Impact Range Configuration".bold());
+        println!("Current: [{}, {}, {}]", 
+            project_ctx.metadata.quality_settings.risk_impact_range.range[0],
+            project_ctx.metadata.quality_settings.risk_impact_range.range[1],
+            project_ctx.metadata.quality_settings.risk_impact_range.range[2]);
+        
+        let start: i32 = Text::new("Start value:")
+            .with_default(&project_ctx.metadata.quality_settings.risk_impact_range.range[0].to_string())
+            .prompt()?
+            .parse()
+            .unwrap_or(1);
+        
+        let end: i32 = Text::new("End value:")
+            .with_default(&project_ctx.metadata.quality_settings.risk_impact_range.range[1].to_string())
+            .prompt()?
+            .parse()
+            .unwrap_or(5);
+        
+        let step: i32 = Text::new("Step size:")
+            .with_default(&project_ctx.metadata.quality_settings.risk_impact_range.range[2].to_string())
+            .prompt()?
+            .parse()
+            .unwrap_or(1);
+        
+        project_ctx.metadata.quality_settings.risk_impact_range = RiskScoringConfig::new(start, end, step);
+        println!("{} Impact range updated to: [{}, {}, {}]", "✓".green(), start, end, step);
+    }
+    
+    // Save the updated settings
+    let project_file = project_ctx.root_path.join("project.ron");
+    project_ctx.metadata.save_to_file(project_file)?;
+    println!("{} Settings saved to project file", "✓".green());
+    
+    Ok(())
+}
+
+async fn configure_risk_thresholds(project_ctx: &mut ProjectContext) -> Result<()> {
+    println!("\n{}", "Risk Tolerance Thresholds Configuration".bold().blue());
+    println!("These thresholds determine risk categories based on normalized risk scores (0.0 to 1.0)");
+    
+    let current = &project_ctx.metadata.quality_settings.risk_tolerance_thresholds;
+    println!("Current thresholds:");
+    println!("  BAR (Broadly Acceptable): < {:.2}", current.bar_threshold);
+    println!("  Tolerable (with reduction): {:.2} - {:.2}", current.bar_threshold, current.afap_threshold);
+    println!("  AFAP (As Far As Practicable): {:.2} - {:.2}", current.afap_threshold, current.int_threshold);
+    println!("  Intolerable: > {:.2}", current.int_threshold);
+    
+    let bar: f64 = Text::new("BAR threshold (0.0-1.0):")
+        .with_default(&current.bar_threshold.to_string())
+        .prompt()?
+        .parse()
+        .unwrap_or(0.25);
+    
+    let afap: f64 = Text::new("AFAP threshold (0.0-1.0):")
+        .with_default(&current.afap_threshold.to_string())
+        .prompt()?
+        .parse()
+        .unwrap_or(0.50);
+    
+    let int: f64 = Text::new("Intolerable threshold (0.0-1.0):")
+        .with_default(&current.int_threshold.to_string())
+        .prompt()?
+        .parse()
+        .unwrap_or(0.75);
+    
+    match tessera_core::RiskToleranceThresholds::new(bar, afap, int) {
+        Ok(new_thresholds) => {
+            project_ctx.metadata.quality_settings.risk_tolerance_thresholds = new_thresholds;
+            println!("{} Risk tolerance thresholds updated", "✓".green());
+            
+            // Save the updated settings
+            let project_file = project_ctx.root_path.join("project.ron");
+            project_ctx.metadata.save_to_file(project_file)?;
+            println!("{} Settings saved to project file", "✓".green());
+        },
+        Err(e) => {
+            println!("{} Invalid thresholds: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+async fn view_current_settings(project_ctx: &ProjectContext) -> Result<()> {
+    println!("\n{}", "Current Quality Settings".bold().blue());
+    
+    let prob_range = &project_ctx.metadata.quality_settings.risk_probability_range;
+    let impact_range = &project_ctx.metadata.quality_settings.risk_impact_range;
+    let thresholds = &project_ctx.metadata.quality_settings.risk_tolerance_thresholds;
+    
+    println!("\n{}", "Risk Scoring Ranges:".bold());
+    println!("  Probability: [{}, {}, {}] -> values: {:?}", 
+        prob_range.range[0], prob_range.range[1], prob_range.range[2], prob_range.values());
+    println!("  Impact: [{}, {}, {}] -> values: {:?}", 
+        impact_range.range[0], impact_range.range[1], impact_range.range[2], impact_range.values());
+    
+    println!("\n{}", "Risk Tolerance Thresholds:".bold());
+    println!("  BAR (Broadly Acceptable): < {:.2}", thresholds.bar_threshold);
+    println!("  Tolerable (with reduction): {:.2} - {:.2}", thresholds.bar_threshold, thresholds.afap_threshold);
+    println!("  AFAP (As Far As Practicable): {:.2} - {:.2}", thresholds.afap_threshold, thresholds.int_threshold);
+    println!("  Intolerable: > {:.2}", thresholds.int_threshold);
     
     Ok(())
 }
