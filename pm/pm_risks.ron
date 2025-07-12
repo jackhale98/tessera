@@ -7,7 +7,7 @@
         probability: Medium,
         impact: Major,
         risk_score: 1.6,
-        status: Closed,
+        status: Realized,
         owner: None,
         identified_by: "Jack",
         identified_date: "2025-07-11T23:02:43.375572267Z",
@@ -42,7 +42,7 @@
         residual_impact: None,
         tags: [],
         created: "2025-07-11T23:02:43.375572267Z",
-        updated: "2025-07-11T23:28:40.373206790Z",
+        updated: "2025-07-11T23:54:38.183254913Z",
         metadata: {},
     ),
 ]
