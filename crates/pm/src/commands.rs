@@ -931,6 +931,54 @@ impl ProjectCommands {
         println!("  Completed: {}", completed);
         println!("  On Hold: {}", on_hold);
         
+        // Risk summary
+        let risks = self.repository.get_risks();
+        if !risks.is_empty() {
+            println!("\nProject Risk Summary:");
+            println!("  Total Risks: {}", risks.len());
+            
+            let high_risks = risks.iter().filter(|r| matches!(r.status, crate::risk::RiskStatus::Identified | crate::risk::RiskStatus::Analyzing | crate::risk::RiskStatus::Planning | crate::risk::RiskStatus::Mitigating | crate::risk::RiskStatus::Monitoring) && r.risk_score >= 75.0).count();
+            let medium_risks = risks.iter().filter(|r| matches!(r.status, crate::risk::RiskStatus::Identified | crate::risk::RiskStatus::Analyzing | crate::risk::RiskStatus::Planning | crate::risk::RiskStatus::Mitigating | crate::risk::RiskStatus::Monitoring) && r.risk_score >= 50.0 && r.risk_score < 75.0).count();
+            let low_risks = risks.iter().filter(|r| matches!(r.status, crate::risk::RiskStatus::Identified | crate::risk::RiskStatus::Analyzing | crate::risk::RiskStatus::Planning | crate::risk::RiskStatus::Mitigating | crate::risk::RiskStatus::Monitoring) && r.risk_score < 50.0).count();
+            let closed_risks = risks.iter().filter(|r| matches!(r.status, crate::risk::RiskStatus::Closed | crate::risk::RiskStatus::Transferred | crate::risk::RiskStatus::Realized)).count();
+            
+            println!("  🔴 High Risk (≥75): {}", high_risks);
+            println!("  🟡 Medium Risk (50-74): {}", medium_risks);
+            println!("  🟢 Low Risk (<50): {}", low_risks);
+            println!("  ✅ Closed/Mitigated: {}", closed_risks);
+            
+            let avg_risk_score = risks.iter().filter(|r| matches!(r.status, crate::risk::RiskStatus::Identified | crate::risk::RiskStatus::Analyzing | crate::risk::RiskStatus::Planning | crate::risk::RiskStatus::Mitigating | crate::risk::RiskStatus::Monitoring)).map(|r| r.risk_score).sum::<f32>() / risks.iter().filter(|r| matches!(r.status, crate::risk::RiskStatus::Identified | crate::risk::RiskStatus::Analyzing | crate::risk::RiskStatus::Planning | crate::risk::RiskStatus::Mitigating | crate::risk::RiskStatus::Monitoring)).count().max(1) as f32;
+            println!("  Average Risk Score: {:.1}", avg_risk_score);
+        }
+        
+        // Issue summary
+        let issues = self.repository.get_issues();
+        if !issues.is_empty() {
+            println!("\nIssue Summary:");
+            println!("  Total Issues: {}", issues.len());
+            
+            let open_issues = issues.iter().filter(|i| matches!(i.status, crate::issue::IssueStatus::Open | crate::issue::IssueStatus::InProgress)).count();
+            let resolved_issues = issues.iter().filter(|i| matches!(i.status, crate::issue::IssueStatus::Resolved | crate::issue::IssueStatus::Closed)).count();
+            let critical_issues = issues.iter().filter(|i| matches!(i.priority, crate::issue::IssuePriority::Critical)).count();
+            let high_issues = issues.iter().filter(|i| matches!(i.priority, crate::issue::IssuePriority::High)).count();
+            
+            println!("  🟢 Open Issues: {}", open_issues);
+            println!("  ✅ Resolved: {}", resolved_issues);
+            println!("  🚨 Critical Priority: {}", critical_issues);
+            println!("  ⚠️  High Priority: {}", high_issues);
+            
+            let overdue_issues = issues.iter().filter(|i| {
+                if let Some(due_date) = i.due_date {
+                    due_date < Utc::now().date_naive() && !matches!(i.status, crate::issue::IssueStatus::Resolved | crate::issue::IssueStatus::Closed)
+                } else {
+                    false
+                }
+            }).count();
+            if overdue_issues > 0 {
+                println!("  ⏰ Overdue Issues: {}", overdue_issues);
+            }
+        }
+        
         Ok(())
     }
 
@@ -1444,6 +1492,14 @@ impl ProjectCommands {
             println!("   Type: {:?}", baseline.baseline_type);
             println!("   Created: {} by {}", baseline.created_date.format("%Y-%m-%d"), baseline.created_by);
             println!("   Current: {}", if baseline.is_current { "Yes" } else { "No" });
+            println!("   Project Duration: {} to {} ({} days)", 
+                baseline.project_snapshot.start_date.format("%Y-%m-%d"),
+                baseline.project_snapshot.end_date.format("%Y-%m-%d"),
+                (baseline.project_snapshot.end_date - baseline.project_snapshot.start_date).num_days());
+            println!("   Total Cost: ${:.2}", baseline.project_snapshot.total_cost);
+            println!("   Total Effort: {:.1} hours", baseline.project_snapshot.total_effort_hours);
+            println!("   Tasks: {}", baseline.project_snapshot.tasks.len());
+            println!("   Milestones: {}", baseline.project_snapshot.milestones.len());
             println!("   ID: {}", baseline.id);
             println!();
         }
@@ -1572,6 +1628,7 @@ impl ProjectCommands {
                 "Target Resolution Date",
                 "Mitigation Strategy",
                 "Add Mitigation Action",
+                "Convert to Issue (Risk Realized)",
                 "Done",
             ];
 
@@ -1717,6 +1774,35 @@ impl ProjectCommands {
                     
                     risk.mitigation_actions.push(action);
                     println!("✓ Mitigation action added!");
+                },
+                "Convert to Issue (Risk Realized)" => {
+                    let confirm = Confirm::new(&format!("Convert risk '{}' to an issue? This indicates the risk has been realized.", risk.title))
+                        .with_default(false)
+                        .prompt()?;
+                    
+                    if confirm {
+                        // Create new issue from risk
+                        let mut issue = crate::issue::Issue::new(
+                            format!("RISK REALIZED: {}", risk.title),
+                            format!("Risk converted to issue: {}", risk.description),
+                            risk.identified_by.clone(), // Use risk identifier as reporter
+                        );
+                        
+                        // Set priority to high since this is a realized risk
+                        issue.priority = crate::issue::IssuePriority::High;
+                        
+                        // Update the risk status to realized/transferred
+                        risk.status = crate::risk::RiskStatus::Transferred;
+                        risk.actual_resolution_date = Some(Utc::now().date_naive());
+                        
+                        // Add issue to repository
+                        let _ = self.repository.add_issue(issue.clone());
+                        
+                        println!("✓ Risk converted to issue: {}", issue.title);
+                        println!("  Issue ID: {}", issue.id);
+                        println!("  Risk status updated to: Transferred");
+                        break; // Exit risk editing since it's now an issue
+                    }
                 },
                 "Done" => break,
                 _ => {}
@@ -2598,7 +2684,7 @@ impl ProjectCommands {
         // Perform comparison
         let baseline1 = &baselines[baseline1_index];
         let baseline2 = &baselines[baseline2_index];
-        let comparison = baseline1.compare_to(baseline2);
+        let comparison = baseline2.compare_to(baseline1); // Compare FROM baseline1 TO baseline2
 
         // Display comparison results
         println!("\nBaseline Comparison Report");
@@ -2627,14 +2713,24 @@ impl ProjectCommands {
 
                 println!("  {} {} - {:?}", variance_symbol, task_change.task_name, task_change.variance_type);
                 
+                // Show baseline vs current dates
+                println!("    Baseline: {} to {}", 
+                    task_change.baseline_start.format("%Y-%m-%d"),
+                    task_change.baseline_end.format("%Y-%m-%d"));
+                if let (Some(current_start), Some(current_end)) = (task_change.current_start, task_change.current_end) {
+                    println!("    Current:  {} to {}", 
+                        current_start.format("%Y-%m-%d"),
+                        current_end.format("%Y-%m-%d"));
+                }
+                
                 if task_change.schedule_variance_days != 0 {
-                    println!("    Schedule: {} days", task_change.schedule_variance_days);
+                    println!("    Schedule Variance: {} days", task_change.schedule_variance_days);
                 }
-                if task_change.cost_variance != 0.0 {
-                    println!("    Cost: ${:.2}", task_change.cost_variance);
+                if task_change.effort_variance_hours.abs() > 0.01 {
+                    println!("    Effort Variance: {:.1} hours", task_change.effort_variance_hours);
                 }
-                if task_change.effort_variance_hours != 0.0 {
-                    println!("    Effort: {:.1} hours", task_change.effort_variance_hours);
+                if task_change.cost_variance.abs() > 0.01 {
+                    println!("    Cost Variance: ${:.2}", task_change.cost_variance);
                 }
             }
         }
@@ -2663,5 +2759,278 @@ impl ProjectCommands {
         }
 
         Ok(())
+    }
+
+    /// Analyze critical path for a specific task
+    pub async fn analyze_task_critical_path_interactive(&self) -> Result<()> {
+        let tasks = self.repository.get_tasks();
+        
+        if tasks.is_empty() {
+            println!("No tasks found.");
+            return Ok(());
+        }
+
+        // Create task options
+        let task_options: Vec<String> = tasks.iter()
+            .map(|t| format!("{} - {}", t.name, t.description))
+            .collect();
+
+        let selected = Select::new("Select task to analyze critical path:", task_options.clone())
+            .with_help_message("Choose the task to find the critical path to")
+            .prompt()?;
+
+        let task_index = task_options.iter().position(|x| x == &selected).unwrap();
+        let target_task = &tasks[task_index];
+
+        // Calculate critical path to this task
+        let critical_path = self.calculate_critical_path_to_task(target_task.id);
+
+        println!("\nCritical Path Analysis for Task: {}", target_task.name);
+        println!("========================================");
+
+        if critical_path.is_empty() {
+            println!("No critical path found - task has no dependencies or predecessors.");
+            return Ok(());
+        }
+
+        println!("Critical path (tasks that must complete for this task to start):");
+        
+        let mut total_duration = 0.0;
+        let mut total_effort = 0.0;
+
+        for (i, task_id) in critical_path.iter().enumerate() {
+            if let Some(task) = tasks.iter().find(|t| t.id == *task_id) {
+                let duration = task.duration_days().unwrap_or(0) as f64;
+                let status_symbol = match task.status {
+                    TaskStatus::Completed => "✅",
+                    TaskStatus::InProgress => "🔄",
+                    TaskStatus::OnHold => "⏸️",
+                    TaskStatus::Cancelled => "❌",
+                    _ => "⏳",
+                };
+
+                println!("{}. {} {} - {} ({:.0} days, {:.1} hours)", 
+                    i + 1, status_symbol, task.name, task.description, duration, task.estimated_hours);
+                
+                if !task.is_completed() {
+                    total_duration += duration;
+                    total_effort += task.estimated_hours;
+                }
+            }
+        }
+
+        println!("\nCritical Path Summary:");
+        println!("  Total tasks in path: {}", critical_path.len());
+        println!("  Remaining duration: {:.0} days", total_duration);
+        println!("  Remaining effort: {:.1} hours", total_effort);
+
+        // Show potential delays
+        let at_risk_tasks: Vec<_> = critical_path.iter()
+            .filter_map(|task_id| {
+                tasks.iter().find(|t| t.id == *task_id)
+                    .filter(|t| !t.is_completed() && 
+                        (t.due_date.map_or(false, |due| due < Utc::now()) ||
+                         matches!(t.status, TaskStatus::OnHold)))
+            })
+            .collect();
+
+        if !at_risk_tasks.is_empty() {
+            println!("\n⚠️  At-Risk Tasks in Critical Path:");
+            for task in at_risk_tasks {
+                let risk_reason = if task.due_date.map_or(false, |due| due < Utc::now()) {
+                    "OVERDUE"
+                } else if matches!(task.status, TaskStatus::OnHold) {
+                    "ON HOLD"
+                } else {
+                    "AT RISK"
+                };
+                println!("  🔴 {} - {}", task.name, risk_reason);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Analyze critical path for a specific milestone
+    pub async fn analyze_milestone_critical_path_interactive(&self) -> Result<()> {
+        let milestones = self.repository.get_milestones();
+        
+        if milestones.is_empty() {
+            println!("No milestones found.");
+            return Ok(());
+        }
+
+        // Create milestone options
+        let milestone_options: Vec<String> = milestones.iter()
+            .map(|m| format!("{} - {} ({})", m.name, m.description, m.target_date.format("%Y-%m-%d")))
+            .collect();
+
+        let selected = Select::new("Select milestone to analyze critical path:", milestone_options.clone())
+            .with_help_message("Choose the milestone to find the critical path to")
+            .prompt()?;
+
+        let milestone_index = milestone_options.iter().position(|x| x == &selected).unwrap();
+        let target_milestone = &milestones[milestone_index];
+
+        // Calculate critical path to this milestone
+        let critical_path = self.calculate_critical_path_to_milestone(target_milestone.id);
+
+        println!("\nCritical Path Analysis for Milestone: {}", target_milestone.name);
+        println!("==========================================");
+        println!("Target Date: {}", target_milestone.target_date.format("%Y-%m-%d"));
+
+        if critical_path.is_empty() {
+            println!("No critical path found - milestone has no dependencies.");
+            return Ok(());
+        }
+
+        println!("\nCritical path (tasks that must complete for this milestone):");
+        
+        let tasks = self.repository.get_tasks();
+        let mut total_duration = 0.0;
+        let mut total_effort = 0.0;
+        let mut earliest_completion = Utc::now().date_naive();
+
+        for (i, task_id) in critical_path.iter().enumerate() {
+            if let Some(task) = tasks.iter().find(|t| t.id == *task_id) {
+                let duration = task.duration_days().unwrap_or(0) as f64;
+                let status_symbol = match task.status {
+                    TaskStatus::Completed => "✅",
+                    TaskStatus::InProgress => "🔄",
+                    TaskStatus::OnHold => "⏸️",
+                    TaskStatus::Cancelled => "❌",
+                    _ => "⏳",
+                };
+
+                println!("{}. {} {} - {} ({:.0} days, {:.1} hours)", 
+                    i + 1, status_symbol, task.name, task.description, duration, task.estimated_hours);
+                
+                if !task.is_completed() {
+                    total_duration += duration;
+                    total_effort += task.estimated_hours;
+                    
+                    // Estimate when this task might complete
+                    if let Some(due_date) = task.due_date {
+                        let due_date_naive = due_date.date_naive();
+                        if due_date_naive > earliest_completion {
+                            earliest_completion = due_date_naive;
+                        }
+                    }
+                }
+            }
+        }
+
+        println!("\nCritical Path Summary:");
+        println!("  Total tasks in path: {}", critical_path.len());
+        println!("  Remaining duration: {:.0} days", total_duration);
+        println!("  Remaining effort: {:.1} hours", total_effort);
+        println!("  Estimated completion: {}", earliest_completion.format("%Y-%m-%d"));
+
+        // Check if milestone is at risk
+        let target_date_naive = target_milestone.target_date.date_naive();
+        if earliest_completion > target_date_naive {
+            let delay_days = (earliest_completion - target_date_naive).num_days();
+            println!("\n🔴 MILESTONE AT RISK!");
+            println!("  Expected delay: {} days", delay_days);
+            println!("  Target: {}", target_date_naive.format("%Y-%m-%d"));
+            println!("  Estimated: {}", earliest_completion.format("%Y-%m-%d"));
+        } else {
+            println!("\n🟢 Milestone appears to be on track");
+        }
+
+        Ok(())
+    }
+
+    /// Calculate critical path to a specific task
+    fn calculate_critical_path_to_task(&self, target_task_id: Id) -> Vec<Id> {
+        let tasks = self.repository.get_tasks();
+        let mut path = Vec::new();
+        let mut visited = std::collections::HashSet::new();
+        
+        self.build_critical_path_recursive(target_task_id, &tasks, &mut path, &mut visited);
+        
+        // Reverse to get the path from start to target
+        path.reverse();
+        path
+    }
+
+    /// Calculate critical path to a specific milestone
+    fn calculate_critical_path_to_milestone(&self, target_milestone_id: Id) -> Vec<Id> {
+        let milestones = self.repository.get_milestones();
+        let tasks = self.repository.get_tasks();
+        let mut path = Vec::new();
+        
+        if let Some(milestone) = milestones.iter().find(|m| m.id == target_milestone_id) {
+            // For each dependent task of the milestone, find their critical paths
+            for &task_id in &milestone.dependent_tasks {
+                let task_path = self.calculate_critical_path_to_task(task_id);
+                // Add unique tasks to the path
+                for task_id in task_path {
+                    if !path.contains(&task_id) {
+                        path.push(task_id);
+                    }
+                }
+            }
+
+            // Also check milestone dependencies (tasks/milestones this milestone depends on)
+            for dependency in &milestone.dependencies {
+                let dep_path = self.calculate_critical_path_to_task(dependency.predecessor_id);
+                for task_id in dep_path {
+                    if !path.contains(&task_id) {
+                        path.push(task_id);
+                    }
+                }
+            }
+        }
+        
+        path
+    }
+
+    /// Recursive helper to build critical path
+    fn build_critical_path_recursive(
+        &self, 
+        task_id: Id, 
+        tasks: &[Task], 
+        path: &mut Vec<Id>, 
+        visited: &mut std::collections::HashSet<Id>
+    ) {
+        if visited.contains(&task_id) {
+            return; // Avoid cycles
+        }
+        
+        visited.insert(task_id);
+        
+        if let Some(task) = tasks.iter().find(|t| t.id == task_id) {
+            // Add current task to path
+            path.push(task_id);
+            
+            // Find the longest predecessor path
+            let mut longest_predecessor_path = Vec::new();
+            let mut max_duration = 0.0;
+            
+            for dependency in &task.dependencies {
+                let mut temp_path = Vec::new();
+                let mut temp_visited = visited.clone();
+                self.build_critical_path_recursive(dependency.predecessor_id, tasks, &mut temp_path, &mut temp_visited);
+                
+                // Calculate total duration of this path
+                let path_duration: f64 = temp_path.iter()
+                    .filter_map(|&id| tasks.iter().find(|t| t.id == id))
+                    .map(|t| t.duration_days().unwrap_or(0) as f64)
+                    .sum();
+                
+                if path_duration > max_duration {
+                    max_duration = path_duration;
+                    longest_predecessor_path = temp_path;
+                }
+            }
+            
+            // Add the longest predecessor path
+            for predecessor_id in longest_predecessor_path {
+                if !path.contains(&predecessor_id) {
+                    path.insert(path.len() - 1, predecessor_id); // Insert before current task
+                }
+            }
+        }
     }
 }

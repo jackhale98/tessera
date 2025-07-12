@@ -299,6 +299,7 @@ async fn run_pm_interactive(project_ctx: ProjectContext) -> Result<()> {
             "🐛 Issue Tracking", 
             "📊 Baselines",
             "📅 Calendars",
+            "🔍 Critical Path Analysis",
             "💰 Cost Analysis",
             "📈 Dashboard",
             "← Back to Main Menu",
@@ -326,6 +327,9 @@ async fn run_pm_interactive(project_ctx: ProjectContext) -> Result<()> {
             },
             "📅 Calendars" => {
                 run_pm_calendar_menu(project_ctx.clone()).await
+            },
+            "🔍 Critical Path Analysis" => {
+                run_pm_critical_path_menu(project_ctx.clone()).await
             },
             "💰 Cost Analysis" => {
                 execute_pm_command(PmCommands::CostAnalysis, project_ctx.clone()).await
@@ -982,6 +986,43 @@ async fn run_pm_calendar_menu(project_ctx: ProjectContext) -> Result<()> {
             },
             "🔓 Remove Calendar Assignment" => {
                 execute_pm_command(PmCommands::UnassignCalendar, project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+
+// PM Critical Path Analysis Menu
+async fn run_pm_critical_path_menu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Project Management - Critical Path Analysis".bold().blue());
+        
+        let options = vec![
+            "📋 Analyze Task Critical Path",
+            "🏁 Analyze Milestone Critical Path",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select analysis type:", options)
+            .with_help_message("Choose what to analyze the critical path for")
+            .prompt()?;
+        
+        let result = match selection {
+            "📋 Analyze Task Critical Path" => {
+                execute_pm_command(PmCommands::AnalyzeTaskCriticalPath, project_ctx.clone()).await
+            },
+            "🏁 Analyze Milestone Critical Path" => {
+                execute_pm_command(PmCommands::AnalyzeMilestoneCriticalPath, project_ctx.clone()).await
             },
             "← Back" => {
                 break;

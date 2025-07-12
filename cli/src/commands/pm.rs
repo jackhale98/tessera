@@ -38,5 +38,7 @@ pub async fn execute_pm_command(command: PmCommands, project_ctx: ProjectContext
         PmCommands::UnassignCalendar => pm_commands.remove_calendar_assignment_interactive().await,
         PmCommands::CheckMilestoneStatus => pm_commands.check_milestone_status(),
         PmCommands::ShowMilestoneAlerts => pm_commands.show_milestone_alerts(),
+        PmCommands::AnalyzeTaskCriticalPath => pm_commands.analyze_task_critical_path_interactive().await,
+        PmCommands::AnalyzeMilestoneCriticalPath => pm_commands.analyze_milestone_critical_path_interactive().await,
     }
 }

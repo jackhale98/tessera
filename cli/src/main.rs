@@ -360,6 +360,14 @@ enum PmCommands {
     /// Show milestone alerts
     #[command(name = "milestone:alerts")]
     ShowMilestoneAlerts,
+
+    /// Analyze critical path for a task
+    #[command(name = "analysis:task-path")]
+    AnalyzeTaskCriticalPath,
+
+    /// Analyze critical path for a milestone
+    #[command(name = "analysis:milestone-path")]
+    AnalyzeMilestoneCriticalPath,
 }
 
 #[derive(Subcommand, Clone)]

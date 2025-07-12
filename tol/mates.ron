@@ -1,0 +1,14 @@
+[
+    (
+        id: ("1662a29c-14c5-4345-b4c4-16eef59bbb70"),
+        name: "pin in hole",
+        description: "",
+        mate_type: Clearance,
+        primary_feature: ("87e747f3-76ee-4be3-a961-2001e124b247"),
+        secondary_feature: ("45c06c11-9bd9-4f8a-81f5-8e29805f42a6"),
+        offset: 0.0,
+        created: "2025-07-12T00:18:35.047441472Z",
+        updated: "2025-07-12T00:18:35.047441472Z",
+        metadata: {},
+    ),
+]
