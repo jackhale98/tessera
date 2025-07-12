@@ -32,7 +32,7 @@ impl ProjectScheduler {
         Self { config }
     }
     
-    pub fn compute_schedule(&self, tasks: &[Task], _resources: &[Resource], project_start: DateTime<Utc>) -> Result<ProjectSchedule> {
+    pub fn compute_schedule(&self, tasks: &[Task], milestones: &[Milestone], _resources: &[Resource], project_start: DateTime<Utc>) -> Result<ProjectSchedule> {
         if tasks.is_empty() {
             return Err(tessera_core::DesignTrackError::Validation(
                 "Cannot schedule empty task list".to_string()
@@ -59,18 +59,29 @@ impl ProjectScheduler {
         // Calculate free float for all tasks
         self.calculate_free_floats(&mut task_schedules, tasks)?;
         
-        // Identify critical path
-        let critical_path = self.find_critical_path(&task_schedules);
+        // Process milestones
+        let milestone_schedules = self.calculate_milestone_schedules(milestones, &task_schedules)?;
         
-        let total_duration_days = (project_end - project_start).num_days();
+        // Update project end date to include milestones
+        let milestone_end = milestone_schedules.values()
+            .map(|ms| ms.target_date)
+            .max()
+            .unwrap_or(project_end);
+        let final_project_end = project_end.max(milestone_end);
+        
+        // Identify critical path including milestones
+        let critical_path = self.find_critical_path_with_milestones(&task_schedules, &milestone_schedules);
+        
+        let total_duration_days = (final_project_end - project_start).num_days();
         
         Ok(ProjectSchedule {
             generated: Utc::now(),
             project_start,
-            project_end,
+            project_end: final_project_end,
             critical_path,
             total_duration_days,
             task_schedule: task_schedules,
+            milestone_schedule: milestone_schedules,
         })
     }
     
@@ -418,6 +429,82 @@ impl ProjectScheduler {
         
         // Free float = min successor constraint - earliest finish of this task
         (min_successor_start - task_schedule.earliest_finish).num_days()
+    }
+
+    /// Calculate milestone schedules based on dependencies
+    fn calculate_milestone_schedules(
+        &self,
+        milestones: &[Milestone],
+        task_schedules: &indexmap::IndexMap<Id, TaskScheduleInfo>,
+    ) -> Result<indexmap::IndexMap<Id, MilestoneScheduleInfo>> {
+        let mut milestone_schedules = indexmap::IndexMap::new();
+
+        for milestone in milestones {
+            let mut earliest_date = milestone.target_date;
+            
+            // Check dependencies to calculate earliest possible date
+            for dep in &milestone.dependencies {
+                if let Some(task_schedule) = task_schedules.get(&dep.predecessor_id) {
+                    let constraint_date = match dep.dependency_type {
+                        DependencyType::FinishToStart => {
+                            task_schedule.earliest_finish + Duration::days(dep.lag_days.ceil() as i64)
+                        }
+                        DependencyType::StartToStart => {
+                            task_schedule.earliest_start + Duration::days(dep.lag_days.ceil() as i64)
+                        }
+                        DependencyType::FinishToFinish => {
+                            task_schedule.earliest_finish + Duration::days(dep.lag_days.ceil() as i64)
+                        }
+                        DependencyType::StartToFinish => {
+                            task_schedule.earliest_start + Duration::days(dep.lag_days.ceil() as i64)
+                        }
+                    };
+                    
+                    if constraint_date > earliest_date {
+                        earliest_date = constraint_date;
+                    }
+                }
+            }
+
+            let slack_days = (milestone.target_date - earliest_date).num_days();
+            let is_critical = slack_days <= 0;
+
+            milestone_schedules.insert(milestone.id, MilestoneScheduleInfo {
+                milestone_id: milestone.id,
+                earliest_date,
+                latest_date: milestone.target_date,
+                target_date: milestone.target_date,
+                slack_days,
+                is_critical,
+            });
+        }
+
+        Ok(milestone_schedules)
+    }
+
+    /// Find critical path including both tasks and milestones
+    fn find_critical_path_with_milestones(
+        &self,
+        task_schedules: &indexmap::IndexMap<Id, TaskScheduleInfo>,
+        milestone_schedules: &indexmap::IndexMap<Id, MilestoneScheduleInfo>,
+    ) -> Vec<Id> {
+        let mut critical_path = Vec::new();
+
+        // Add critical tasks
+        for schedule_info in task_schedules.values() {
+            if schedule_info.is_critical {
+                critical_path.push(schedule_info.task_id);
+            }
+        }
+
+        // Add critical milestones
+        for milestone_info in milestone_schedules.values() {
+            if milestone_info.is_critical {
+                critical_path.push(milestone_info.milestone_id);
+            }
+        }
+
+        critical_path
     }
 }
 

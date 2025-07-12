@@ -91,10 +91,33 @@ cargo run -- quality dashboard
 # Project management commands
 cargo run -- pm task:add
 cargo run -- pm task:list
+cargo run -- pm task:edit
+cargo run -- pm task:delete
 cargo run -- pm resource:add
+cargo run -- pm resource:list
+cargo run -- pm resource:edit
+cargo run -- pm resource:delete
 cargo run -- pm milestone:add
+cargo run -- pm milestone:list
+cargo run -- pm milestone:edit
+cargo run -- pm milestone:delete
 cargo run -- pm schedule
+cargo run -- pm cost:analysis
 cargo run -- pm dashboard
+
+# Legacy project management functionality (data structures implemented, CLI pending)
+cargo run -- pm risk:add          # Risk management with comprehensive tracking
+cargo run -- pm risk:list         # See tessera-pm/src/risk.rs for implementation
+cargo run -- pm risk:edit         # ProjectRisk struct supports mitigation and escalation
+cargo run -- pm issue:add         # Issue tracking with SLA management
+cargo run -- pm issue:list        # See tessera-pm/src/issue.rs for implementation  
+cargo run -- pm issue:edit        # Issue struct supports priority and business impact
+cargo run -- pm baseline:create   # Project baseline snapshots with variance analysis
+cargo run -- pm baseline:list     # See tessera-pm/src/baseline.rs for implementation
+cargo run -- pm baseline:compare  # BaselineComparison struct supports project health
+cargo run -- pm calendar:add      # Calendar management with holidays and exceptions
+cargo run -- pm calendar:list     # See tessera-pm/src/calendar.rs for implementation
+cargo run -- pm calendar:edit     # Calendar struct supports resource-specific calendars
 
 # Tolerance analysis commands
 cargo run -- tol component:add
@@ -125,6 +148,39 @@ cargo run -- interactive --module risk
 cargo run -- interactive --module verification
 cargo run -- interactive --module pm
 cargo run -- interactive --module tol
+
+# Enhanced PM Interactive Mode Structure
+```
+📋 Manage Project
+├── ✅ Tasks (Add/List/Edit/Delete)
+├── 👥 Resources (Add/List/Edit/Delete)  
+└── 🏁 Milestones (Add/List/Edit/Delete + Dependency Management)
+
+📅 Scheduling (Critical Path, Gantt Charts)
+
+⚠️  Project Risk Management (Schedule/Cost Risks)
+├── ➕ Add Project Risk
+├── 📋 List Project Risks
+└── ✏️  Edit Project Risk
+
+🐛 Issue Tracking (SLA Management)
+├── ➕ Add Issue
+├── 📋 List Issues
+└── ✏️  Edit Issue
+
+📊 Baselines (Project Snapshots)
+├── 📊 Create Baseline
+├── 📋 List Baselines
+└── 🔄 Compare Baselines
+
+📅 Calendars (Working Hours/Holidays)
+├── ➕ Add Calendar
+├── 📋 List Calendars
+└── ✏️  Edit Calendar
+
+💰 Cost Analysis (Resource-Based)
+📈 Dashboard (Project Overview)
+```
 
 # Cross-module linking commands
 cargo run -- link add
@@ -167,9 +223,18 @@ cargo run -- link validate
 - **Integration**: Cross-module integration with requirements and risk modules
 
 ### Project Management (tessera-pm)
-- **Task Management**: Task hierarchy with dependencies, effort tracking, and progress monitoring
-- **Resource Management**: Resource allocation, calendars, and utilization tracking
-- **Scheduling**: Critical path analysis, Gantt chart generation, and schedule optimization
+- **Task Management**: Task hierarchy with complex dependencies (FinishToStart, StartToStart, FinishToFinish, StartToFinish), effort tracking, progress monitoring, and deletion with dependency cleanup
+- **Advanced Scheduling**: Critical path method (CPM) implementation with forward/backward pass, slack calculation, free float analysis, and milestone integration
+- **Resource Management**: Resource allocation with percentage-based assignments, hourly rates, skill tracking, utilization analysis, and deletion with assignment cleanup
+- **Milestone Support**: Full milestone lifecycle management with dependencies, critical path inclusion, and deletion capabilities
+- **Cross-Entity Dependencies**: Tasks and milestones can depend on each other with full relationship type support
+- **Scheduling Engine**: Petgraph-based dependency resolution, topological sorting, circular dependency detection, and milestone date integration
+- **Cost Analysis**: Comprehensive cost estimation based on resource hourly rates, task progress, and effort allocation with variance tracking
+- **Enhanced Displays**: Task listings show dependencies, costs, and progress; critical path shows names and descriptions; schedule includes milestone dates
+- **Gantt Chart Generation**: Visual project timelines with critical path highlighting and resource utilization
+- **Task Types**: Support for effort-driven, fixed-duration, fixed-work, and milestone tasks with flexible resource scaling
+- **Dependency Management**: Enhanced lag/lead time support with multiple relationship types and constraint propagation
+- **Progress Tracking**: Effort-weighted completion percentages and real-time progress updates
 - **Risk Management**: Project-specific risk registry separate from design risks
 - **Issue Tracking**: Issue lifecycle management with SLA definitions and escalation workflows
 - **Baseline Management**: Project baseline snapshots with variance analysis and health indicators
@@ -220,10 +285,10 @@ quality/             # Legacy quality data (deprecated)
   controls.ron
   risks.ron
 pm/
-  tasks.ron          # Project tasks
-  resources.ron      # Resource definitions
-  milestones.ron     # Project milestones
-  schedules.ron      # Schedule snapshots
+  tasks.ron          # Project tasks with dependency relationships
+  resources.ron      # Resource definitions with allocation details
+  milestones.ron     # Project milestones with status tracking
+  schedules.ron      # Generated schedule snapshots with critical path analysis
   pm_risks.ron       # Project management risks
   issues.ron         # Issue tracking
   baselines.ron      # Project baselines
@@ -263,6 +328,44 @@ data/simulations/    # Monte Carlo CSV export files
 - **Cross-Module References**: ID-based links with validation support
 - **Git-Aware Operations**: Version control integration for collaboration
 - **Extension Points**: Plugin-friendly architecture for future modules
+
+## Recent Improvements (Project Management Module)
+
+### Task and Entity Management Enhancements
+- **Task/Milestone/Resource Deletion**: Interactive deletion with confirmation prompts and dependency cleanup
+- **Enhanced Progress Calculations**: Effort-weighted progress calculations that include individual task progress
+- **Improved Task Listing**: Shows dependency details and cross-entity relationships
+- **Cross-Entity Dependencies**: Tasks can depend on milestones and vice versa with full dependency type support
+
+### Milestone Dependency Management
+- **Comprehensive Dependency Support**: Milestones can depend on both tasks and other milestones
+- **Interactive Dependency Assignment**: User-friendly interface for managing milestone dependencies
+- **Dependency Type Selection**: Full support for FS, SS, FF, SF dependency types with lag/lead times
+- **Dependency Description**: Optional descriptions for dependency relationships
+
+### Schedule and Cost Analysis
+- **Enhanced Schedule Generation**: Includes milestone dates and constraints in project schedules
+- **Critical Path Enhancement**: Shows task names and descriptions in critical path analysis
+- **Comprehensive Cost Analysis**: Resource-based cost estimation with hourly rates and task progress
+- **Cross-Entity Integration**: Schedule generation considers both task and milestone dependencies
+
+### Legacy Functionality Integration
+- **Project Risk Management**: Full implementation with risk assessment, mitigation actions, and escalation
+- **Issue Tracking**: Comprehensive issue management with SLA definitions and escalation workflows
+- **Baseline Management**: Project baseline snapshots with variance analysis and health indicators
+- **Calendar System**: Working hours, holidays, exceptions, and resource-specific calendar support
+
+### Data Model Improvements
+- **Many-to-Many Relationships**: Enhanced support for complex entity relationships
+- **Comprehensive Validation**: Real-time validation during entity creation and modification
+- **Audit Trails**: Created/updated timestamps for all entities
+- **Metadata Support**: Extensible metadata fields for future enhancements
+
+### Interactive Mode Enhancements
+- **Field-by-Field Editing**: Comprehensive editing menus for all entity properties
+- **Multi-Selection Support**: Ability to select multiple entities when creating links
+- **Guided Workflows**: Step-by-step workflows with validation at each step
+- **Enhanced Error Handling**: Clear error messages and recovery options
 
 ## Key Dependencies
 

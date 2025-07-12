@@ -624,18 +624,33 @@ impl PMEntityEditor {
             .filter(|t| t.id != task.id && !task.dependencies.iter().any(|d| d.predecessor_id == t.id))
             .collect();
 
-        if available_tasks.is_empty() {
-            println!("No tasks available to add as dependencies");
+        let all_milestones = repository.get_milestones();
+        let available_milestones: Vec<_> = all_milestones.iter()
+            .filter(|m| !task.dependencies.iter().any(|d| d.predecessor_id == m.id))
+            .collect();
+
+        if available_tasks.is_empty() && available_milestones.is_empty() {
+            println!("No tasks or milestones available to add as dependencies");
             return Ok(());
         }
 
-        let task_options: Vec<String> = available_tasks.iter()
-            .map(|t| format!("{} - {}", t.name, t.status))
-            .collect();
+        // Create combined options list
+        let mut all_options: Vec<(String, Id)> = Vec::new();
+        
+        // Add tasks
+        for t in &available_tasks {
+            all_options.push((format!("TASK: {} - {}", t.name, t.status), t.id));
+        }
+        
+        // Add milestones  
+        for m in &available_milestones {
+            all_options.push((format!("MILESTONE: {} - {}", m.name, m.target_date.format("%Y-%m-%d")), m.id));
+        }
 
-        let selected = Select::new("Select predecessor task:", task_options.clone()).prompt()?;
-        let selected_index = task_options.iter().position(|x| x == &selected).unwrap();
-        let predecessor = available_tasks[selected_index];
+        let option_labels: Vec<String> = all_options.iter().map(|(label, _)| label.clone()).collect();
+        let selected = Select::new("Select predecessor (task or milestone):", option_labels.clone()).prompt()?;
+        let selected_index = option_labels.iter().position(|x| x == &selected).unwrap();
+        let predecessor_id = all_options[selected_index].1;
 
         // Select dependency type
         let dep_types = vec![
@@ -662,7 +677,7 @@ impl PMEntityEditor {
             .prompt()?;
 
         let dependency = TaskDependency {
-            predecessor_id: predecessor.id,
+            predecessor_id,
             dependency_type,
             lag_days,
             description: None,
@@ -671,8 +686,15 @@ impl PMEntityEditor {
         task.dependencies.push(dependency);
         task.updated = Utc::now();
         
+        // Get name for confirmation message
+        let predecessor_name = repository.find_task_by_id(predecessor_id)
+            .map(|t| t.name.clone())
+            .or_else(|| repository.find_milestone_by_id(predecessor_id)
+                     .map(|m| m.name.clone()))
+            .unwrap_or_else(|| "Unknown".to_string());
+        
         println!("✓ Dependency added: {} -> {} ({})", 
-            predecessor.name, task.name, dependency_type);
+            predecessor_name, task.name, dependency_type);
 
         Ok(())
     }
@@ -993,6 +1015,7 @@ impl PMEntityEditor {
                 "Edit Name",
                 "Edit Description",
                 "Edit Target Date",
+                "Manage Dependencies",
                 "Manage Dependent Tasks",
                 "Save & Exit",
                 "Exit without Saving",
@@ -1025,6 +1048,9 @@ impl PMEntityEditor {
                     
                     milestone.target_date = Utc.from_utc_datetime(&naive_date.and_hms_opt(12, 0, 0).unwrap());
                     milestone.updated = Utc::now();
+                }
+                "Manage Dependencies" => {
+                    Self::manage_milestone_task_dependencies(&mut milestone, repository)?;
                 }
                 "Manage Dependent Tasks" => {
                     Self::manage_milestone_dependencies(&mut milestone, repository)?;
@@ -1113,6 +1139,173 @@ impl PMEntityEditor {
                     milestone.dependent_tasks.remove(selected_index);
                     milestone.updated = Utc::now();
                     println!("✓ Dependent task removed");
+                }
+                "Back" => break,
+                _ => {}
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Manage what the milestone depends on (tasks or other milestones)
+    fn manage_milestone_task_dependencies(milestone: &mut Milestone, repository: &ProjectRepository) -> Result<()> {
+        loop {
+            println!("\nMilestone Dependencies:");
+            if milestone.dependencies.is_empty() {
+                println!("  No dependencies");
+            } else {
+                for dep in &milestone.dependencies {
+                    let dep_type_str = match dep.dependency_type {
+                        DependencyType::FinishToStart => "FS",
+                        DependencyType::StartToStart => "SS",
+                        DependencyType::FinishToFinish => "FF", 
+                        DependencyType::StartToFinish => "SF",
+                    };
+                    
+                    // Try to find the dependency name from tasks and milestones
+                    let dep_name = repository.find_task_by_id(dep.predecessor_id)
+                        .map(|t| format!("{} (Task)", t.name))
+                        .or_else(|| repository.find_milestone_by_id(dep.predecessor_id)
+                                 .map(|m| format!("{} (Milestone)", m.name)))
+                        .unwrap_or_else(|| format!("Unknown ({})", dep.predecessor_id));
+                    
+                    let lag_str = if dep.lag_days != 0.0 {
+                        if dep.lag_days > 0.0 {
+                            format!(" +{:.1}d lag", dep.lag_days)
+                        } else {
+                            format!(" {:.1}d lead", dep.lag_days)
+                        }
+                    } else {
+                        String::new()
+                    };
+                    
+                    println!("  → {} [{}]{}", dep_name, dep_type_str, lag_str);
+                }
+            }
+
+            let choices = vec![
+                "Add Dependency",
+                "Remove Dependency",
+                "Back",
+            ];
+
+            let choice = Select::new("Dependency management:", choices).prompt()?;
+
+            match choice {
+                "Add Dependency" => {
+                    // Get all tasks and milestones that could be predecessors
+                    let mut entities: Vec<(Id, String)> = Vec::new();
+                    
+                    // Add all tasks
+                    for task in repository.get_tasks() {
+                        if task.id != milestone.id { // Can't depend on self
+                            entities.push((task.id, format!("{} (Task)", task.name)));
+                        }
+                    }
+                    
+                    // Add all milestones except self
+                    for ms in repository.get_milestones() {
+                        if ms.id != milestone.id { // Can't depend on self
+                            entities.push((ms.id, format!("{} (Milestone)", ms.name)));
+                        }
+                    }
+                    
+                    // Filter out existing dependencies
+                    let available_entities: Vec<_> = entities.iter()
+                        .filter(|(id, _)| !milestone.dependencies.iter().any(|dep| dep.predecessor_id == *id))
+                        .collect();
+
+                    if available_entities.is_empty() {
+                        println!("No entities available to add as dependencies");
+                        continue;
+                    }
+
+                    let entity_options: Vec<String> = available_entities.iter()
+                        .map(|(_, name)| name.clone())
+                        .collect();
+
+                    let selected = Select::new("Select predecessor:", entity_options.clone()).prompt()?;
+                    let selected_index = entity_options.iter().position(|x| x == &selected).unwrap();
+                    let (selected_id, selected_name) = available_entities[selected_index];
+
+                    // Select dependency type
+                    let dep_types = vec![
+                        ("Finish to Start (FS)", DependencyType::FinishToStart),
+                        ("Start to Start (SS)", DependencyType::StartToStart),
+                        ("Finish to Finish (FF)", DependencyType::FinishToFinish),
+                        ("Start to Finish (SF)", DependencyType::StartToFinish),
+                    ];
+                    
+                    let type_names: Vec<&str> = dep_types.iter().map(|(name, _)| *name).collect();
+                    let selected_type_name = Select::new("Dependency type:", type_names)
+                        .with_help_message("FS: predecessor must finish before this starts | SS: predecessor must start before this starts | FF: predecessor must finish before this finishes | SF: predecessor must start before this finishes")
+                        .prompt()?;
+                    
+                    let dependency_type = dep_types.iter()
+                        .find(|(name, _)| *name == selected_type_name)
+                        .map(|(_, t)| *t)
+                        .unwrap_or(DependencyType::FinishToStart);
+
+                    // Get lag/lead time
+                    let lag_str = Text::new("Lag time (days, negative for lead time):")
+                        .with_default("0")
+                        .with_help_message("Positive = lag (delay), Negative = lead (overlap)")
+                        .prompt()?;
+                    let lag_days: f32 = lag_str.parse().unwrap_or(0.0);
+
+                    // Get description (optional)
+                    let description_str = Text::new("Description (optional):")
+                        .with_help_message("Optional description for this dependency")
+                        .prompt()?;
+                    let description = if description_str.trim().is_empty() {
+                        None
+                    } else {
+                        Some(description_str)
+                    };
+
+                    let new_dependency = TaskDependency {
+                        predecessor_id: *selected_id,
+                        dependency_type,
+                        lag_days,
+                        description,
+                    };
+
+                    milestone.dependencies.push(new_dependency);
+                    milestone.updated = Utc::now();
+                    println!("✓ Dependency added: {}", selected_name);
+                }
+                "Remove Dependency" => {
+                    if milestone.dependencies.is_empty() {
+                        println!("No dependencies to remove");
+                        continue;
+                    }
+
+                    let dep_options: Vec<String> = milestone.dependencies.iter()
+                        .map(|dep| {
+                            let dep_name = repository.find_task_by_id(dep.predecessor_id)
+                                .map(|t| format!("{} (Task)", t.name))
+                                .or_else(|| repository.find_milestone_by_id(dep.predecessor_id)
+                                         .map(|m| format!("{} (Milestone)", m.name)))
+                                .unwrap_or_else(|| format!("Unknown ({})", dep.predecessor_id));
+                            
+                            let dep_type_str = match dep.dependency_type {
+                                DependencyType::FinishToStart => "FS",
+                                DependencyType::StartToStart => "SS",
+                                DependencyType::FinishToFinish => "FF",
+                                DependencyType::StartToFinish => "SF",
+                            };
+                            
+                            format!("{} [{}]", dep_name, dep_type_str)
+                        })
+                        .collect();
+
+                    let selected = Select::new("Select dependency to remove:", dep_options.clone()).prompt()?;
+                    let selected_index = dep_options.iter().position(|x| x == &selected).unwrap();
+
+                    milestone.dependencies.remove(selected_index);
+                    milestone.updated = Utc::now();
+                    println!("✓ Dependency removed");
                 }
                 "Back" => break,
                 _ => {}

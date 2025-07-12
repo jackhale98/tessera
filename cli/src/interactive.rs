@@ -295,6 +295,12 @@ async fn run_pm_interactive(project_ctx: ProjectContext) -> Result<()> {
         let options = vec![
             "📋 Manage Project",
             "📅 Scheduling",
+            "⚠️  Project Risk Management",
+            "🐛 Issue Tracking", 
+            "📊 Baselines",
+            "📅 Calendars",
+            "🔍 Critical Path Analysis",
+            "💰 Cost Analysis",
             "📈 Dashboard",
             "← Back to Main Menu",
         ];
@@ -309,6 +315,24 @@ async fn run_pm_interactive(project_ctx: ProjectContext) -> Result<()> {
             },
             "📅 Scheduling" => {
                 execute_pm_command(PmCommands::Schedule, project_ctx.clone()).await
+            },
+            "⚠️  Project Risk Management" => {
+                run_pm_risk_menu(project_ctx.clone()).await
+            },
+            "🐛 Issue Tracking" => {
+                run_pm_issue_menu(project_ctx.clone()).await
+            },
+            "📊 Baselines" => {
+                run_pm_baseline_menu(project_ctx.clone()).await
+            },
+            "📅 Calendars" => {
+                run_pm_calendar_menu(project_ctx.clone()).await
+            },
+            "🔍 Critical Path Analysis" => {
+                run_pm_critical_path_menu(project_ctx.clone()).await
+            },
+            "💰 Cost Analysis" => {
+                execute_pm_command(PmCommands::CostAnalysis, project_ctx.clone()).await
             },
             "📈 Dashboard" => {
                 execute_pm_command(PmCommands::Dashboard, project_ctx.clone()).await
@@ -348,18 +372,25 @@ async fn run_pm_manage_menu(project_ctx: ProjectContext) -> Result<()> {
                     ("Add Task", PmCommands::AddTask),
                     ("List Tasks", PmCommands::ListTasks),
                     ("Edit Task", PmCommands::EditTask),
+                    ("Delete Task", PmCommands::DeleteTask),
                 ], project_ctx.clone()).await
             },
             "👥 Resources" => {
                 run_pm_entity_actions_menu("Resources", &[
                     ("Add Resource", PmCommands::AddResource),
+                    ("List Resources", PmCommands::ListResources),
                     ("Edit Resource", PmCommands::EditResource),
+                    ("Delete Resource", PmCommands::DeleteResource),
                 ], project_ctx.clone()).await
             },
             "🏁 Milestones" => {
                 run_pm_entity_actions_menu("Milestones", &[
                     ("Add Milestone", PmCommands::AddMilestone),
+                    ("List Milestones", PmCommands::ListMilestones),
                     ("Edit Milestone", PmCommands::EditMilestone),
+                    ("Delete Milestone", PmCommands::DeleteMilestone),
+                    ("Check Milestone Status", PmCommands::CheckMilestoneStatus),
+                    ("Show Milestone Alerts", PmCommands::ShowMilestoneAlerts),
                 ], project_ctx.clone()).await
             },
             "← Back" => {
@@ -788,6 +819,215 @@ async fn run_design_controls_submenu(project_ctx: ProjectContext) -> Result<()> 
             },
             "✏️  Edit Design Control" => {
                 execute_risk_command(RiskCommands::EditControl, project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+// PM Project Risk Management Menu
+async fn run_pm_risk_menu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Project Management - Project Risk Management".bold().blue());
+        
+        let options = vec![
+            "➕ Add Project Risk",
+            "📋 List Project Risks",
+            "✏️  Edit Project Risk",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select action:", options)
+            .with_help_message("Choose what to do with project risks (schedule/cost risks)")
+            .prompt()?;
+        
+        let result = match selection {
+            "➕ Add Project Risk" => {
+                execute_pm_command(PmCommands::AddRisk, project_ctx.clone()).await
+            },
+            "📋 List Project Risks" => {
+                execute_pm_command(PmCommands::ListRisks, project_ctx.clone()).await
+            },
+            "✏️  Edit Project Risk" => {
+                execute_pm_command(PmCommands::EditRisk, project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+// PM Issue Tracking Menu
+async fn run_pm_issue_menu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Project Management - Issue Tracking".bold().blue());
+        
+        let options = vec![
+            "➕ Add Issue",
+            "📋 List Issues",
+            "✏️  Edit Issue",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select action:", options)
+            .with_help_message("Choose what to do with project issues")
+            .prompt()?;
+        
+        let result = match selection {
+            "➕ Add Issue" => {
+                execute_pm_command(PmCommands::AddIssue, project_ctx.clone()).await
+            },
+            "📋 List Issues" => {
+                execute_pm_command(PmCommands::ListIssues, project_ctx.clone()).await
+            },
+            "✏️  Edit Issue" => {
+                execute_pm_command(PmCommands::EditIssue, project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+// PM Baseline Management Menu
+async fn run_pm_baseline_menu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Project Management - Baseline Management".bold().blue());
+        
+        let options = vec![
+            "📊 Create Baseline",
+            "📋 List Baselines",
+            "🔄 Compare Baselines",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select action:", options)
+            .with_help_message("Choose what to do with project baselines")
+            .prompt()?;
+        
+        let result = match selection {
+            "📊 Create Baseline" => {
+                execute_pm_command(PmCommands::CreateBaseline, project_ctx.clone()).await
+            },
+            "📋 List Baselines" => {
+                execute_pm_command(PmCommands::ListBaselines, project_ctx.clone()).await
+            },
+            "🔄 Compare Baselines" => {
+                execute_pm_command(PmCommands::CompareBaselines, project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+// PM Calendar Management Menu
+async fn run_pm_calendar_menu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Project Management - Calendar Management".bold().blue());
+        
+        let options = vec![
+            "➕ Add Calendar",
+            "📋 List Calendars",
+            "✏️  Edit Calendar",
+            "🔗 Assign Calendar to Resource",
+            "📋 List Calendar Assignments",
+            "🔓 Remove Calendar Assignment",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select action:", options)
+            .with_help_message("Choose what to do with project calendars")
+            .prompt()?;
+        
+        let result = match selection {
+            "➕ Add Calendar" => {
+                execute_pm_command(PmCommands::AddCalendar, project_ctx.clone()).await
+            },
+            "📋 List Calendars" => {
+                execute_pm_command(PmCommands::ListCalendars, project_ctx.clone()).await
+            },
+            "✏️  Edit Calendar" => {
+                execute_pm_command(PmCommands::EditCalendar, project_ctx.clone()).await
+            },
+            "🔗 Assign Calendar to Resource" => {
+                execute_pm_command(PmCommands::AssignCalendar, project_ctx.clone()).await
+            },
+            "📋 List Calendar Assignments" => {
+                execute_pm_command(PmCommands::ListCalendarAssignments, project_ctx.clone()).await
+            },
+            "🔓 Remove Calendar Assignment" => {
+                execute_pm_command(PmCommands::UnassignCalendar, project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+
+// PM Critical Path Analysis Menu
+async fn run_pm_critical_path_menu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Project Management - Critical Path Analysis".bold().blue());
+        
+        let options = vec![
+            "📋 Analyze Task Critical Path",
+            "🏁 Analyze Milestone Critical Path",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select analysis type:", options)
+            .with_help_message("Choose what to analyze the critical path for")
+            .prompt()?;
+        
+        let result = match selection {
+            "📋 Analyze Task Critical Path" => {
+                execute_pm_command(PmCommands::AnalyzeTaskCriticalPath, project_ctx.clone()).await
+            },
+            "🏁 Analyze Milestone Critical Path" => {
+                execute_pm_command(PmCommands::AnalyzeMilestoneCriticalPath, project_ctx.clone()).await
             },
             "← Back" => {
                 break;

@@ -247,27 +247,127 @@ enum PmCommands {
     #[command(name = "task:edit")]
     EditTask,
     
+    /// Delete a task
+    #[command(name = "task:delete")]
+    DeleteTask,
+    
     /// Add a resource
     #[command(name = "resource:add")]
     AddResource,
+    
+    /// List resources
+    #[command(name = "resource:list")]
+    ListResources,
     
     /// Edit a resource
     #[command(name = "resource:edit")]
     EditResource,
     
+    /// Delete a resource
+    #[command(name = "resource:delete")]
+    DeleteResource,
+    
     /// Add a milestone
     #[command(name = "milestone:add")]
     AddMilestone,
+    
+    /// List milestones
+    #[command(name = "milestone:list")]
+    ListMilestones,
     
     /// Edit a milestone
     #[command(name = "milestone:edit")]
     EditMilestone,
     
+    /// Delete a milestone
+    #[command(name = "milestone:delete")]
+    DeleteMilestone,
+    
     /// Compute project schedule
     Schedule,
     
+    /// Show cost analysis
+    #[command(name = "cost:analysis")]
+    CostAnalysis,
+    
     /// Project management dashboard
     Dashboard,
+    
+    /// Add a project risk
+    #[command(name = "risk:add")]
+    AddRisk,
+    
+    /// List project risks
+    #[command(name = "risk:list")]
+    ListRisks,
+    
+    /// Edit a project risk
+    #[command(name = "risk:edit")]
+    EditRisk,
+    
+    /// Add an issue
+    #[command(name = "issue:add")]
+    AddIssue,
+    
+    /// List issues
+    #[command(name = "issue:list")]
+    ListIssues,
+    
+    /// Edit an issue
+    #[command(name = "issue:edit")]
+    EditIssue,
+    
+    /// Create a baseline
+    #[command(name = "baseline:create")]
+    CreateBaseline,
+    
+    /// List baselines
+    #[command(name = "baseline:list")]
+    ListBaselines,
+    
+    /// Compare baselines
+    #[command(name = "baseline:compare")]
+    CompareBaselines,
+    
+    /// Add a calendar
+    #[command(name = "calendar:add")]
+    AddCalendar,
+    
+    /// List calendars
+    #[command(name = "calendar:list")]
+    ListCalendars,
+    
+    /// Edit a calendar
+    #[command(name = "calendar:edit")]
+    EditCalendar,
+    
+    /// Assign calendar to resource
+    #[command(name = "calendar:assign")]
+    AssignCalendar,
+    
+    /// List calendar assignments
+    #[command(name = "calendar:assignments")]
+    ListCalendarAssignments,
+    
+    /// Remove calendar assignment
+    #[command(name = "calendar:unassign")]
+    UnassignCalendar,
+    
+    /// Check milestone status
+    #[command(name = "milestone:status")]
+    CheckMilestoneStatus,
+    
+    /// Show milestone alerts
+    #[command(name = "milestone:alerts")]
+    ShowMilestoneAlerts,
+
+    /// Analyze critical path for a task
+    #[command(name = "analysis:task-path")]
+    AnalyzeTaskCriticalPath,
+
+    /// Analyze critical path for a milestone
+    #[command(name = "analysis:milestone-path")]
+    AnalyzeMilestoneCriticalPath,
 }
 
 #[derive(Subcommand, Clone)]

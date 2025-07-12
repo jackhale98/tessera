@@ -322,13 +322,17 @@ impl ProjectBaseline {
 
     fn calculate_task_variance(&self, current: &BaselineTask, baseline: &BaselineTask) -> TaskVariance {
         let schedule_variance_days = (current.end_date - baseline.end_date).num_days() as i32;
+        let start_variance_days = (current.start_date - baseline.start_date).num_days() as i32;
+        let duration_variance_days = current.duration_days - baseline.duration_days;
         let cost_variance = current.cost - baseline.cost;
         let effort_variance_hours = current.effort_hours - baseline.effort_hours;
 
-        let variance_type = if schedule_variance_days.abs() > 0 {
+        let variance_type = if schedule_variance_days.abs() > 0 || start_variance_days.abs() > 0 || duration_variance_days.abs() > 0 {
             VarianceType::ScheduleVariance
         } else if cost_variance.abs() > 0.01 {
             VarianceType::CostVariance
+        } else if effort_variance_hours.abs() > 0.01 {
+            VarianceType::ScopeChange
         } else {
             VarianceType::NoChange
         };
@@ -384,35 +388,60 @@ impl BaselineProjectSnapshot {
 
         // Convert tasks to baseline tasks
         for task in tasks {
-            if let (Some(start), Some(end)) = (task.start_date, task.due_date) {
-                let baseline_task = BaselineTask {
-                    id: task.id,
-                    name: task.name.clone(),
-                    start_date: start.date_naive(),
-                    end_date: end.date_naive(),
-                    duration_days: (end.date_naive() - start.date_naive()).num_days() as i32 + 1,
-                    effort_hours: task.estimated_hours as f32,
-                    cost: (task.estimated_hours * 100.0) as f32, // Assume $100/hour default
-                    assigned_resources: task.assigned_resources.iter().map(|assignment| assignment.resource_id.to_string()).collect(),
-                    dependencies: task.dependencies.iter().map(|dep| dep.predecessor_id).collect(),
-                    work_breakdown_structure: None,
-                };
-                
-                total_cost += baseline_task.cost;
-                total_effort_hours += baseline_task.effort_hours;
-                
-                let start_naive = start.date_naive();
-                let end_naive = end.date_naive();
-                
-                if start_date.is_none() || start_naive < start_date.unwrap() {
-                    start_date = Some(start_naive);
+            // Use current dates if available, otherwise estimate based on task duration
+            let (start_naive, end_naive) = match (task.start_date, task.due_date) {
+                (Some(start), Some(end)) => (start.date_naive(), end.date_naive()),
+                (Some(start), None) => {
+                    // Calculate end date from duration or estimated hours
+                    let duration_days = task.duration_days().unwrap_or_else(|| {
+                        (task.estimated_hours / 8.0).ceil() as i64
+                    });
+                    let end = start + chrono::Duration::days(duration_days);
+                    (start.date_naive(), end.date_naive())
+                },
+                (None, Some(end)) => {
+                    // Calculate start date from duration or estimated hours
+                    let duration_days = task.duration_days().unwrap_or_else(|| {
+                        (task.estimated_hours / 8.0).ceil() as i64
+                    });
+                    let start = end - chrono::Duration::days(duration_days);
+                    (start.date_naive(), end.date_naive())
+                },
+                (None, None) => {
+                    // Use current date as start and calculate end from duration
+                    let start = Utc::now();
+                    let duration_days = task.duration_days().unwrap_or_else(|| {
+                        (task.estimated_hours / 8.0).ceil() as i64
+                    });
+                    let end = start + chrono::Duration::days(duration_days);
+                    (start.date_naive(), end.date_naive())
                 }
-                if end_date.is_none() || end_naive > end_date.unwrap() {
-                    end_date = Some(end_naive);
-                }
-                
-                baseline_tasks.insert(task.id, baseline_task);
+            };
+
+            let baseline_task = BaselineTask {
+                id: task.id,
+                name: task.name.clone(),
+                start_date: start_naive,
+                end_date: end_naive,
+                duration_days: (end_naive - start_naive).num_days() as i32 + 1,
+                effort_hours: task.estimated_hours as f32,
+                cost: (task.estimated_hours * 100.0) as f32, // Assume $100/hour default
+                assigned_resources: task.assigned_resources.iter().map(|assignment| assignment.resource_id.to_string()).collect(),
+                dependencies: task.dependencies.iter().map(|dep| dep.predecessor_id).collect(),
+                work_breakdown_structure: None,
+            };
+            
+            total_cost += baseline_task.cost;
+            total_effort_hours += baseline_task.effort_hours;
+            
+            if start_date.is_none() || start_naive < start_date.unwrap() {
+                start_date = Some(start_naive);
             }
+            if end_date.is_none() || end_naive > end_date.unwrap() {
+                end_date = Some(end_naive);
+            }
+            
+            baseline_tasks.insert(task.id, baseline_task);
         }
 
         // Convert milestones to baseline milestones
