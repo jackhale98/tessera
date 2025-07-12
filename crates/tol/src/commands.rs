@@ -2,6 +2,7 @@ use crate::data::*;
 use crate::repository::ToleranceRepository;
 use crate::analysis::ToleranceAnalyzer;
 use crate::sensitivity::{SensitivityAnalyzer, StackupContribution};
+use crate::plotting::{TolerancePlotter, PlotFormat};
 use tessera_core::{ProjectContext, Id, Result};
 use inquire::{Select, Text, Confirm, MultiSelect};
 
@@ -307,7 +308,7 @@ impl ToleranceCommands {
         
         let stackup_selection = Select::new("Select stackup to analyze:", stackup_options.clone()).prompt()?;
         let stackup_index = stackup_options.iter().position(|x| x == &stackup_selection).unwrap();
-        let stackup = &stackups[stackup_index];
+        let stackup = stackups[stackup_index].clone();
         
         if stackup.dimension_chain.is_empty() {
             println!("Stackup has no features. Add features to the stackup first.");
@@ -394,7 +395,7 @@ impl ToleranceCommands {
             println!("{}", "=".repeat(50));
             
             let analyzer = ToleranceAnalyzer::new(config.clone());
-            let mut analysis = analyzer.analyze_stackup_with_contributions(stackup, features, feature_contributions)?;
+            let mut analysis = analyzer.analyze_stackup_with_contributions(&stackup, features, feature_contributions)?;
             analysis.feature_contributions = feature_contributions.clone();
             
             // Display results
@@ -404,16 +405,114 @@ impl ToleranceCommands {
         }
         
         // Save all analyses after running them
-        for analysis in analyses {
-            self.repository.add_analysis(analysis)?;
+        for analysis in &analyses {
+            self.repository.add_analysis(analysis.clone())?;
         }
         
         let tol_dir = self.project_context.module_path("tol");
         self.repository.save_to_directory(&tol_dir)?;
         
+        // Ask if user wants to export plots
+        if !analyses.is_empty() {
+            self.prompt_and_export_plots(&analyses, &stackup).await?;
+        }
+        
         Ok(())
     }
     
+    /// Prompt user for plot export and handle the export process
+    async fn prompt_and_export_plots(&self, analyses: &[StackupAnalysis], stackup: &Stackup) -> Result<()> {
+        let export_plots = Confirm::new("Would you like to export plots of the analysis results?")
+            .with_default(false)
+            .with_help_message("Generate histogram and waterfall plots as SVG or HTML files")
+            .prompt()?;
+        
+        if !export_plots {
+            return Ok(());
+        }
+        
+        // Select which analyses to export (if multiple)
+        let analyses_to_export = if analyses.len() > 1 {
+            let analysis_options: Vec<String> = analyses.iter()
+                .map(|a| format!("{:?} Analysis - {}", a.config.method, a.created.format("%H:%M:%S")))
+                .collect();
+            
+            let selected_analyses = MultiSelect::new("Select analyses to export:", analysis_options.clone())
+                .with_help_message("Use space to select/deselect, enter to confirm")
+                .prompt()?;
+            
+            if selected_analyses.is_empty() {
+                println!("No analyses selected for export.");
+                return Ok(());
+            }
+            
+            // Get the selected analysis objects
+            selected_analyses.iter()
+                .filter_map(|selected| {
+                    analysis_options.iter().position(|opt| opt == selected)
+                        .map(|idx| &analyses[idx])
+                })
+                .collect()
+        } else {
+            vec![&analyses[0]]
+        };
+        
+        // Select export format(s)
+        let format_options = vec!["SVG", "HTML", "Both"];
+        let format_selection = Select::new("Select export format:", format_options).prompt()?;
+        
+        let formats = match format_selection {
+            "SVG" => vec![PlotFormat::Svg],
+            "HTML" => vec![PlotFormat::Html],
+            "Both" => vec![PlotFormat::Svg, PlotFormat::Html],
+            _ => vec![PlotFormat::Svg],
+        };
+        
+        // Create plots directory
+        let plots_dir = self.project_context.module_path("tol").join("plots");
+        std::fs::create_dir_all(&plots_dir)?;
+        
+        let plotter = TolerancePlotter::new();
+        let features_map = self.repository.get_features().into_iter()
+            .map(|f| (f.id.into(), f.clone()))
+            .collect();
+        
+        // Export plots for each selected analysis
+        for analysis in analyses_to_export {
+            let timestamp = analysis.created.format("%Y%m%d_%H%M%S");
+            let method_name = format!("{:?}", analysis.config.method).replace(" ", "_");
+            let base_filename = format!("{}_{}_{}",
+                stackup.name.replace(" ", "_"),
+                method_name,
+                timestamp
+            );
+            
+            for format in &formats {
+                // Export histogram if Monte Carlo analysis
+                if analysis.results.distribution_data_file.is_some() {
+                    let histogram_filename = format!("{}_histogram.{}", base_filename, format.extension());
+                    let histogram_path = plots_dir.join(&histogram_filename);
+                    
+                    match plotter.export_histogram(analysis, stackup, *format, &histogram_path) {
+                        Ok(_) => println!("✓ Exported histogram: {}", histogram_filename),
+                        Err(e) => println!("✗ Failed to export histogram: {}", e),
+                    }
+                }
+                
+                // Export waterfall plot
+                let waterfall_filename = format!("{}_waterfall.{}", base_filename, format.extension());
+                let waterfall_path = plots_dir.join(&waterfall_filename);
+                
+                match plotter.export_waterfall(analysis, stackup, &features_map, *format, &waterfall_path) {
+                    Ok(_) => println!("✓ Exported waterfall plot: {}", waterfall_filename),
+                    Err(e) => println!("✗ Failed to export waterfall plot: {}", e),
+                }
+            }
+        }
+        
+        println!("\n📊 Plots exported to: {}", plots_dir.display());
+        Ok(())
+    }
     
     fn display_analysis_results(&self, analysis: &StackupAnalysis) {
         println!("\n{}", "Analysis Results".to_uppercase());
@@ -1982,7 +2081,7 @@ impl ToleranceCommands {
         Ok(())
     }
 
-    pub async fn view_analysis_interactive(&mut self) -> Result<()> {
+    pub async fn list_analysis_interactive(&mut self) -> Result<()> {
         let analyses = self.repository.get_analyses();
         if analyses.is_empty() {
             println!("No analysis results found. Run stackup analyses first.");
@@ -1999,13 +2098,19 @@ impl ToleranceCommands {
             ))
             .collect();
         
-        // Allow user to select an analysis to view
-        let analysis_selection = Select::new("Select analysis to view:", analysis_options.clone()).prompt()?;
+        // Allow user to select an analysis to display
+        let analysis_selection = Select::new("Select analysis to display:", analysis_options.clone()).prompt()?;
         let analysis_index = analysis_options.iter().position(|x| x == &analysis_selection).unwrap();
         let selected_analysis = &analyses[analysis_index];
         
         // Display the selected analysis results
         self.display_analysis_results(selected_analysis);
+        
+        // Ask if user wants to export plots for this analysis
+        let stackups = self.repository.get_stackups();
+        if let Some(stackup) = stackups.iter().find(|s| s.name == selected_analysis.stackup_name) {
+            self.prompt_and_export_plots(&[selected_analysis.clone()], stackup).await?;
+        }
         
         Ok(())
     }

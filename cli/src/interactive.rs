@@ -528,7 +528,7 @@ async fn run_tol_analysis_menu(project_ctx: ProjectContext) -> Result<()> {
         
         let options = vec![
             "🚀 Run New Analysis",
-            "📋 View Previous Results",
+            "📋 List Previous Results",
             "🗑️ Delete Analysis Results",
             "← Back",
         ];
@@ -541,8 +541,8 @@ async fn run_tol_analysis_menu(project_ctx: ProjectContext) -> Result<()> {
             "🚀 Run New Analysis" => {
                 execute_tol_command(TolCommands::RunAnalysis, project_ctx.clone()).await
             },
-            "📋 View Previous Results" => {
-                execute_tol_command(TolCommands::ViewAnalysis, project_ctx.clone()).await
+            "📋 List Previous Results" => {
+                execute_tol_command(TolCommands::ListAnalysis, project_ctx.clone()).await
             },
             "🗑️ Delete Analysis Results" => {
                 execute_tol_command(TolCommands::DeleteAnalysis, project_ctx.clone()).await

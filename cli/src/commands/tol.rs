@@ -19,7 +19,7 @@ pub async fn execute_tol_command(command: TolCommands, project_ctx: ProjectConte
         TolCommands::EditStackup => tol_commands.edit_stackup_interactive().await,
         TolCommands::DeleteStackup => tol_commands.delete_stackup_interactive().await,
         TolCommands::RunAnalysis => tol_commands.run_analysis_interactive().await,
-        TolCommands::ViewAnalysis => tol_commands.view_analysis_interactive().await,
+        TolCommands::ListAnalysis => tol_commands.list_analysis_interactive().await,
         TolCommands::DeleteAnalysis => tol_commands.delete_analysis_interactive().await,
         TolCommands::Dashboard => tol_commands.show_dashboard(),
     }

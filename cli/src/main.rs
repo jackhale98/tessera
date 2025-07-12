@@ -324,9 +324,9 @@ enum TolCommands {
     #[command(name = "analysis:run")]
     RunAnalysis,
     
-    /// View previous analysis results
-    #[command(name = "analysis:view")]
-    ViewAnalysis,
+    /// List previous analysis results
+    #[command(name = "analysis:list")]
+    ListAnalysis,
     
     /// Delete analysis results
     #[command(name = "analysis:delete")]

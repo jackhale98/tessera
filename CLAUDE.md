@@ -98,9 +98,21 @@ cargo run -- pm dashboard
 
 # Tolerance analysis commands
 cargo run -- tol component:add
+cargo run -- tol component:edit
+cargo run -- tol component:list
 cargo run -- tol feature:add
+cargo run -- tol feature:edit
+cargo run -- tol feature:list
+cargo run -- tol mate:add
+cargo run -- tol mate:edit
+cargo run -- tol mate:list
 cargo run -- tol stackup:add
+cargo run -- tol stackup:edit
+cargo run -- tol stackup:list
+cargo run -- tol stackup:delete
 cargo run -- tol analysis:run
+cargo run -- tol analysis:list
+cargo run -- tol analysis:delete
 cargo run -- tol dashboard
 
 # Project status and validation
@@ -164,12 +176,18 @@ cargo run -- link validate
 - **Calendar System**: Working hours, holidays, exceptions, and resource-specific calendars
 
 ### Tolerance Analysis (tessera-tol)
-- **Component Modeling**: Feature-based component definitions with tolerances
-- **Stackup Analysis**: Dimensional chain analysis with statistical methods
-- **Monte Carlo Simulation**: Statistical analysis with multiple distribution types
-- **Sensitivity Analysis**: Parameter sensitivity and contribution analysis
-- **Process Capability**: Cp, Cpk, and process performance analysis
-- **Distribution Engine**: Support for Normal, Uniform, Triangular, and LogNormal distributions
+- **Component Modeling**: Feature-based component definitions with engineering metadata
+- **Feature Management**: Comprehensive feature specifications with tolerance definitions, feature types (Length, Diameter, Radius, Angle, Position, Surface), categories (External/Internal), and MMC/LMC calculations
+- **Mate Relationships**: Assembly mate modeling with fit types (Clearance, Transition, Interference), fit validation, and engineering calculations
+- **Stackup Analysis**: Dimensional chain analysis with multiple analysis methods (Worst Case, Root Sum Square, Monte Carlo)
+- **Monte Carlo Simulation**: Advanced statistical analysis with multiple distribution types, user-configurable confidence levels, quartile analysis, and CSV data export
+- **Sensitivity Analysis**: Feature contribution analysis for design optimization
+- **Process Capability**: Cp, Cpk calculations with engineering specification limits
+- **Distribution Engine**: Support for Normal, Uniform, Triangular, LogNormal, and Beta distributions
+- **Fit Validation**: Automatic mate validation with engineering design rules
+- **Data Export**: CSV simulation data export for external analysis and reporting
+- **Plot Generation**: Interactive histogram and waterfall plot export in SVG and HTML formats for analysis visualization
+- **Visual Analytics**: Quartile-based histogram visualization for Monte Carlo results and feature contribution waterfall charts
 
 ### CLI Application (tessera)
 - **Modular Commands**: Separate command structures for each module (requirements, risk, verification)
@@ -212,9 +230,12 @@ pm/
   calendars.ron      # Calendar definitions
 tol/
   components.ron     # Component definitions
-  features.ron       # Feature specifications
+  features.ron       # Feature specifications with tolerance data
+  mates.ron          # Assembly mate relationships
   stackups.ron       # Stackup definitions
-  analysis.ron       # Analysis results
+  analyses.ron       # Analysis results with statistics
+  plots/             # Exported SVG and HTML plots
+data/simulations/    # Monte Carlo CSV export files
 ```
 
 ### Key Design Patterns
