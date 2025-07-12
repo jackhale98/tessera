@@ -292,6 +292,10 @@ enum TolCommands {
     #[command(name = "feature:edit")]
     EditFeature,
     
+    /// List features
+    #[command(name = "feature:list")]
+    ListFeatures,
+    
     /// Add a mate
     #[command(name = "mate:add")]
     AddMate,
@@ -316,9 +320,9 @@ enum TolCommands {
     #[command(name = "analysis:run")]
     RunAnalysis,
     
-    /// Configure analysis settings
-    #[command(name = "analysis:config")]
-    ConfigureAnalysis,
+    /// View previous analysis results
+    #[command(name = "analysis:view")]
+    ViewAnalysis,
     
     /// Tolerance analysis dashboard
     Dashboard,

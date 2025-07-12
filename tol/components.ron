@@ -1,0 +1,22 @@
+[
+    (
+        id: ("11e16b46-fb09-468e-b9f9-c514ea3c9849"),
+        name: "plate",
+        description: "",
+        part_number: None,
+        features: [],
+        created: "2025-07-12T01:57:59.137245967Z",
+        updated: "2025-07-12T01:57:59.137245967Z",
+        metadata: {},
+    ),
+    (
+        id: ("a28b7733-087b-477d-90c5-2035c1b6802d"),
+        name: "pin",
+        description: "",
+        part_number: None,
+        features: [],
+        created: "2025-07-12T01:58:02.894365615Z",
+        updated: "2025-07-12T01:58:02.894365615Z",
+        metadata: {},
+    ),
+]

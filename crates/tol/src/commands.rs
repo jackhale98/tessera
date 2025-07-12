@@ -1,8 +1,9 @@
 use crate::data::*;
 use crate::repository::ToleranceRepository;
 use crate::analysis::ToleranceAnalyzer;
+use crate::sensitivity::{SensitivityAnalyzer, StackupContribution};
 use tessera_core::{ProjectContext, Id, Result};
-use inquire::{Select, Text, Confirm};
+use inquire::{Select, Text, Confirm, MultiSelect};
 
 pub struct ToleranceCommands {
     repository: ToleranceRepository,
@@ -192,36 +193,65 @@ impl ToleranceCommands {
         let mut stackup = Stackup::new(name, description, target_dimension);
         
         // Add features to the dimension chain
-        let features = self.repository.get_features();
-        if !features.is_empty() {
-            let add_features = Confirm::new("Add features to dimension chain?")
+        let add_features = {
+            let features = self.repository.get_features();
+            !features.is_empty() && Confirm::new("Add features to dimension chain?")
                 .with_default(true)
-                .prompt()?;
-            
-            if add_features {
-                loop {
-                    let feature_options: Vec<String> = features.iter()
-                        .map(|f| format!("{} - {} ({})", f.name, f.description, f.nominal))
-                        .collect();
-                    
-                    if feature_options.is_empty() {
-                        break;
-                    }
-                    
-                    let feature_selection = Select::new("Select feature to add:", feature_options.clone()).prompt()?;
-                    let feature_index = feature_options.iter().position(|x| x == &feature_selection).unwrap();
-                    let selected_feature = &features[feature_index];
-                    
-                    stackup.add_dimension(selected_feature.id);
-                    println!("Added feature: {}", selected_feature.name);
-                    
-                    let continue_adding = Confirm::new("Add another feature?")
-                        .with_default(false)
-                        .prompt()?;
-                    
-                    if !continue_adding {
-                        break;
-                    }
+                .prompt()?
+        };
+        
+        if add_features {
+            loop {
+                // First, select component
+                let components = self.repository.get_components();
+                if components.is_empty() {
+                    println!("No components found. Add components first.");
+                    break;
+                }
+                
+                let component_options: Vec<String> = components.iter()
+                    .map(|c| format!("{} - {}", c.name, c.description))
+                    .collect();
+                
+                let component_selection = Select::new("Select component:", component_options.clone()).prompt()?;
+                let component_index = component_options.iter().position(|x| x == &component_selection).unwrap();
+                let selected_component = &components[component_index];
+                
+                // Then, select feature from that component
+                let features = self.repository.get_features();
+                let component_features: Vec<&Feature> = features.iter()
+                    .filter(|f| f.component_id == selected_component.id)
+                    .collect();
+                
+                if component_features.is_empty() {
+                    println!("No features found for component '{}'. Add features first.", selected_component.name);
+                    break;
+                }
+                
+                let feature_options: Vec<String> = component_features.iter()
+                    .map(|f| format!("{} - {} ({})", f.name, f.description, f.nominal))
+                    .collect();
+                
+                if feature_options.is_empty() {
+                    break;
+                }
+                
+                let feature_selection = Select::new("Select feature to add:", feature_options.clone()).prompt()?;
+                let feature_index = feature_options.iter().position(|x| x == &feature_selection).unwrap();
+                let selected_feature = component_features[feature_index].clone();
+                
+                stackup.add_dimension(selected_feature.id, selected_feature.name.clone());
+                println!("Added feature: {}", selected_feature.name);
+                
+                // Configure vector contribution for this feature
+                self.configure_feature_contribution(&mut stackup, &selected_feature).await?;
+                
+                let continue_adding = Confirm::new("Add another feature?")
+                    .with_default(false)
+                    .prompt()?;
+                
+                if !continue_adding {
+                    break;
                 }
             }
         }
@@ -259,26 +289,27 @@ impl ToleranceCommands {
             return Ok(());
         }
         
-        // Select analysis method
-        let analysis_methods = vec![
+        // Select analysis methods using MultiSelect
+        let analysis_method_options = vec![
             "Worst Case",
-            "Root Sum Square (RSS)",
+            "Root Sum Square (RSS)", 
             "Monte Carlo",
         ];
         
-        let method_selection = Select::new("Select analysis method:", analysis_methods).prompt()?;
-        let analysis_method = match method_selection {
-            "Worst Case" => AnalysisMethod::WorstCase,
-            "Root Sum Square (RSS)" => AnalysisMethod::RootSumSquare,
-            "Monte Carlo" => AnalysisMethod::MonteCarlo,
-            _ => AnalysisMethod::MonteCarlo,
-        };
+        let selected_methods = MultiSelect::new("Select analysis methods:", analysis_method_options.clone())
+            .with_help_message("Use space to select/deselect, enter to confirm")
+            .prompt()?;
+        
+        if selected_methods.is_empty() {
+            println!("No analysis methods selected. Exiting analysis.");
+            return Ok(());
+        }
         
         // Configure Monte Carlo if selected
         let mut simulations = 10000;
         let mut confidence_level = 0.95;
         
-        if let AnalysisMethod::MonteCarlo = analysis_method {
+        if selected_methods.contains(&"Monte Carlo") {
             let sim_str = Text::new("Number of simulations:")
                 .with_default("10000")
                 .prompt()?;
@@ -290,84 +321,56 @@ impl ToleranceCommands {
             confidence_level = conf_str.parse().unwrap_or(0.95);
         }
         
-        let config = AnalysisConfig {
-            method: analysis_method,
-            simulations,
-            confidence_level,
-        };
-        
-        // Configure feature contributions
+        // Use stackup's existing feature contributions
         let features = self.repository.get_features();
-        let stackup_features: Vec<_> = stackup.dimension_chain.iter()
-            .filter_map(|&id| features.iter().find(|f| f.id == id))
-            .collect();
+        let feature_contributions = &stackup.feature_contributions;
         
-        let mut feature_contributions = Vec::new();
+        // Run the analyses for each selected method
+        println!("\nRunning tolerance analysis for stackup: {}", stackup.name);
+        println!("Selected methods: {}", selected_methods.join(", "));
         
-        println!("\nConfiguring feature contributions:");
-        for feature in &stackup_features {
-            println!("\nFeature: {} ({:.3})", feature.name, feature.nominal);
-            
-            let direction_options = vec![
-                "Additive (+1.0)",
-                "Subtractive (-1.0)",
-                "Custom multiplier",
-            ];
-            
-            let direction_selection = Select::new("Direction/multiplier:", direction_options).prompt()?;
-            
-            let (direction, contribution_type) = match direction_selection {
-                "Additive (+1.0)" => (1.0, ContributionType::Additive),
-                "Subtractive (-1.0)" => (-1.0, ContributionType::Subtractive),
-                "Custom multiplier" => {
-                    let custom_str = Text::new("Enter custom multiplier:")
-                        .with_default("1.0")
-                        .prompt()?;
-                    let custom: f64 = custom_str.parse().unwrap_or(1.0);
-                    (custom, ContributionType::Custom(custom))
-                },
-                _ => (1.0, ContributionType::Additive),
+        let mut analyses = Vec::new();
+        
+        for method_name in &selected_methods {
+            let analysis_method = match *method_name {
+                "Worst Case" => AnalysisMethod::WorstCase,
+                "Root Sum Square (RSS)" => AnalysisMethod::RootSumSquare,
+                "Monte Carlo" => AnalysisMethod::MonteCarlo,
+                _ => AnalysisMethod::MonteCarlo,
             };
             
-            let half_count = Confirm::new("Half contribution?")
-                .with_default(false)
-                .prompt()?;
+            let config = AnalysisConfig {
+                method: analysis_method,
+                simulations,
+                confidence_level,
+                use_three_sigma: true, // Default to showing both 3-sigma and confidence intervals
+            };
             
-            feature_contributions.push(FeatureContribution {
-                feature_id: feature.id,
-                feature_name: feature.name.clone(),
-                direction,
-                half_count,
-                contribution_type,
-            });
+            println!("\n{}", "=".repeat(50));
+            println!("Running {} Analysis", method_name);
+            println!("{}", "=".repeat(50));
+            
+            let analyzer = ToleranceAnalyzer::new(config.clone());
+            let mut analysis = analyzer.analyze_stackup_with_contributions(stackup, features, feature_contributions)?;
+            analysis.feature_contributions = feature_contributions.clone();
+            
+            // Display results
+            self.display_analysis_results(&analysis);
+            
+            analyses.push(analysis);
         }
         
-        // Run the analysis
-        println!("\nRunning tolerance analysis for stackup: {}", stackup.name);
-        let analyzer = ToleranceAnalyzer::new(config.clone());
-        let mut analysis = analyzer.analyze_stackup_with_contributions(stackup, features, &feature_contributions)?;
-        analysis.feature_contributions = feature_contributions;
-        
-        self.repository.add_analysis(analysis.clone())?;
+        // Save all analyses after running them
+        for analysis in analyses {
+            self.repository.add_analysis(analysis)?;
+        }
         
         let tol_dir = self.project_context.module_path("tol");
         self.repository.save_to_directory(&tol_dir)?;
         
-        // Display results
-        self.display_analysis_results(&analysis);
-        
         Ok(())
     }
     
-    pub async fn configure_analysis_interactive(&mut self) -> Result<()> {
-        println!("Analysis configuration options:");
-        println!("1. Default configurations are applied during analysis");
-        println!("2. Monte Carlo: 10,000 simulations, 95% confidence");
-        println!("3. Feature contributions: Additive by default");
-        println!("4. Use 'Run Analysis' to configure specific analysis settings");
-        
-        Ok(())
-    }
     
     fn display_analysis_results(&self, analysis: &StackupAnalysis) {
         println!("\n{}", "Analysis Results".to_uppercase());
@@ -378,10 +381,49 @@ impl ToleranceCommands {
         
         println!("\n{}", "Stackup Statistics");
         println!("{}", "-".repeat(30));
+        println!("Target Dimension: {:.6}", analysis.target_dimension);
         println!("Nominal Dimension: {:.6}", analysis.results.nominal_dimension);
-        println!("Predicted Tolerance: +{:.6} / -{:.6}", 
+        println!("Dimension Variance: {:.6}", analysis.results.nominal_dimension - analysis.target_dimension);
+        
+        // Show primary predicted tolerance
+        println!("Primary Tolerance: +{:.6} / -{:.6}", 
                  analysis.results.predicted_tolerance.plus, 
                  analysis.results.predicted_tolerance.minus);
+        
+        // Show 3-sigma tolerance if available
+        if let Some(ref three_sigma) = analysis.results.three_sigma_tolerance {
+            println!("3-Sigma Tolerance: +{:.6} / -{:.6} (Engineering Standard)", 
+                     three_sigma.plus, three_sigma.minus);
+        }
+        
+        // Show user-specified confidence tolerance if available
+        if let Some(ref user_tolerance) = analysis.results.user_specified_tolerance {
+            println!("{}% Confidence Tolerance: +{:.6} / -{:.6}", 
+                     (analysis.config.confidence_level * 100.0),
+                     user_tolerance.plus, user_tolerance.minus);
+            
+            // Add statistical interpretation for Monte Carlo analyses
+            if matches!(analysis.config.method, AnalysisMethod::MonteCarlo) {
+                if let Some(ref three_sigma) = analysis.results.three_sigma_tolerance {
+                    let ci_total = user_tolerance.plus + user_tolerance.minus;
+                    let sigma3_total = three_sigma.plus + three_sigma.minus;
+                    let ratio = ci_total / sigma3_total;
+                    
+                    println!("\n{}", "Statistical Interpretation (Monte Carlo)");
+                    println!("{}", "-".repeat(50));
+                    println!("Confidence Interval vs 3-Sigma Ratio: {:.3}", ratio);
+                    
+                    if analysis.config.confidence_level == 0.95 {
+                        println!("95% CI should be ~0.653 of 3σ range for normal distributions");
+                        println!("Actual ratio: {:.3} ({})", ratio, 
+                                if (ratio - 0.653).abs() < 0.1 { "Expected" } else { "Check distribution assumptions" });
+                    }
+                    
+                    println!("Distribution assumptions: Each feature tolerance = ±3σ process capability");
+                    println!("Industry standard: Tolerance bands typically represent manufacturing limits");
+                }
+            }
+        }
         
         println!("\n{}", "Process Capability");
         println!("{}", "-".repeat(30));
@@ -392,23 +434,123 @@ impl ToleranceCommands {
         
         if !analysis.feature_contributions.is_empty() {
             println!("\n{}", "Feature Contributions");
-            println!("{}", "-".repeat(50));
+            println!("{}", "-".repeat(70));
             for (i, contrib) in analysis.feature_contributions.iter().enumerate() {
                 let half_indicator = if contrib.half_count { " (Half)" } else { "" };
                 println!("{}. {} - Direction: {:.2}{}",
                          i + 1, contrib.feature_name, contrib.direction, half_indicator);
             }
-        }
-        
-        if let Some(ref dist_data) = analysis.results.distribution_data {
-            if !dist_data.is_empty() {
-                println!("\n{}", "Distribution Data");
-                println!("{}", "-".repeat(30));
-                println!("Samples: {}", dist_data.len());
-                println!("Min: {:.6}", dist_data.iter().fold(f64::INFINITY, |a, &b| a.min(b)));
-                println!("Max: {:.6}", dist_data.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b)));
+            
+            // Add sensitivity analysis
+            if let Ok(sensitivity) = self.calculate_sensitivity_analysis(analysis) {
+                println!("\n{}", "Sensitivity Analysis");
+                println!("{}", "-".repeat(70));
+                println!("Total Variance: {:.6}", sensitivity.total_variance);
+                println!("Total Standard Deviation: {:.6}", sensitivity.total_std_dev);
+                
+                println!("\nFeature Impact Ranking:");
+                for contrib in &sensitivity.contributions {
+                    println!("{}. {} - {:.2}% contribution (variance: {:.6})",
+                             contrib.rank, contrib.feature_name, contrib.percentage, 
+                             contrib.variance_contribution);
+                }
             }
         }
+        
+        // Show nominal and tolerance values for each contribution
+        if !analysis.feature_contributions.is_empty() {
+            println!("\n{}", "Feature Details");
+            println!("{}", "-".repeat(70));
+            let features = self.repository.get_features();
+            for contrib in &analysis.feature_contributions {
+                if let Some(feature) = features.iter().find(|f| f.id == contrib.feature_id) {
+                    println!("{}: Nominal = {:.6}, Tolerance = +{:.6}/-{:.6}",
+                             feature.name, feature.nominal, feature.tolerance.plus, feature.tolerance.minus);
+                }
+            }
+        }
+        
+        // Show quartile data if available (Monte Carlo only)
+        if let Some(ref quartiles) = analysis.results.quartile_data {
+            println!("\n{}", "Distribution Analysis");
+            println!("{}", "-".repeat(50));
+            println!("Minimum: {:.6}", quartiles.minimum);
+            println!("5th Percentile: {:.6}", quartiles.p5);
+            println!("1st Quartile (Q1): {:.6}", quartiles.q1);
+            println!("Median (Q2): {:.6}", quartiles.median);
+            println!("3rd Quartile (Q3): {:.6}", quartiles.q3);
+            println!("95th Percentile: {:.6}", quartiles.p95);
+            println!("Maximum: {:.6}", quartiles.maximum);
+            println!("Interquartile Range (IQR): {:.6}", quartiles.iqr);
+            
+            // Box plot-style visualization
+            let range = quartiles.maximum - quartiles.minimum;
+            if range > 0.0 {
+                println!("\nBox Plot Visualization:");
+                let q1_pos = ((quartiles.q1 - quartiles.minimum) / range * 50.0) as usize;
+                let median_pos = ((quartiles.median - quartiles.minimum) / range * 50.0) as usize;
+                let q3_pos = ((quartiles.q3 - quartiles.minimum) / range * 50.0) as usize;
+                
+                let mut plot = vec!['-'; 52];
+                plot[0] = '|';  // Min
+                plot[51] = '|'; // Max
+                if q1_pos < 52 { plot[q1_pos] = '['; }
+                if median_pos < 52 { plot[median_pos] = '|'; }
+                if q3_pos < 52 { plot[q3_pos] = ']'; }
+                
+                let plot_str: String = plot.iter().collect();
+                println!("{}", plot_str);
+                println!("Min{}Q1{}Median{}Q3{}Max", 
+                        " ".repeat(q1_pos.saturating_sub(3)),
+                        " ".repeat(median_pos.saturating_sub(q1_pos).saturating_sub(6)),
+                        " ".repeat(q3_pos.saturating_sub(median_pos).saturating_sub(6)),
+                        " ".repeat(51_usize.saturating_sub(q3_pos).saturating_sub(3)));
+            }
+        }
+        
+        // Show distribution data summary if available but no quartiles calculated
+        if let Some(ref csv_file_path) = analysis.results.distribution_data_file {
+            if analysis.results.quartile_data.is_none() {
+                println!("\n{}", "Distribution Data");
+                println!("{}", "-".repeat(30));
+                println!("Simulation data saved to: {}", csv_file_path);
+                
+                // Note: For detailed statistics, load the CSV file or view in external tools
+                println!("Note: Load CSV file for detailed distribution statistics");
+            }
+        }
+    }
+    
+    fn calculate_sensitivity_analysis(&self, analysis: &StackupAnalysis) -> Result<crate::sensitivity::SensitivityAnalysis> {
+        let features = self.repository.get_features();
+        
+        // Convert feature contributions to stackup contributions for sensitivity analysis
+        let stackup_contributions: Vec<StackupContribution> = analysis.feature_contributions.iter()
+            .filter_map(|fc| {
+                features.iter().find(|f| f.id == fc.feature_id).map(|feature| {
+                    let component = self.repository.get_components()
+                        .iter()
+                        .find(|c| c.id == feature.component_id)
+                        .map(|c| c.id.to_string())
+                        .unwrap_or_else(|| "unknown".to_string());
+                    
+                    StackupContribution {
+                        component_id: component,
+                        feature_id: fc.feature_id,
+                        direction: fc.direction,
+                        half_count: fc.half_count,
+                    }
+                })
+            })
+            .collect();
+        
+        // Find the stackup
+        let stackups = self.repository.get_stackups();
+        let stackup = stackups.iter().find(|s| s.id == analysis.stackup_id)
+            .ok_or_else(|| tessera_core::DesignTrackError::Validation("Stackup not found".to_string()))?;
+        
+        let sensitivity_analyzer = SensitivityAnalyzer::new(None);
+        sensitivity_analyzer.analyze_stackup(stackup, &features, &stackup_contributions)
     }
     
     pub fn run_analysis(&mut self, stackup_id: Option<Id>) -> Result<()> {
@@ -439,14 +581,34 @@ impl ToleranceCommands {
         println!("Running tolerance analysis for stackup: {}", stackup.name);
         
         // Create default feature contributions
+        let components = self.repository.get_components();
         let feature_contributions: Vec<FeatureContribution> = stackup.dimension_chain.iter()
             .filter_map(|&id| features.iter().find(|f| f.id == id))
-            .map(|f| FeatureContribution {
-                feature_id: f.id,
-                feature_name: f.name.clone(),
-                direction: 1.0,
-                half_count: false,
-                contribution_type: ContributionType::Additive,
+            .map(|f| {
+                let component = components.iter().find(|c| c.id == f.component_id);
+                let feature_info = if let Some(comp) = component {
+                    FeatureInfo::from_feature_and_component(f, comp)
+                } else {
+                    FeatureInfo {
+                        feature_name: f.name.clone(),
+                        feature_description: f.description.clone(),
+                        component_name: "Unknown".to_string(),
+                        component_description: "Unknown".to_string(),
+                        feature_category: f.feature_category,
+                        nominal: f.nominal,
+                        tolerance_plus: f.tolerance.plus,
+                        tolerance_minus: f.tolerance.minus,
+                    }
+                };
+                
+                FeatureContribution {
+                    feature_id: f.id,
+                    feature_name: f.name.clone(),
+                    direction: 1.0,
+                    half_count: false,
+                    contribution_type: ContributionType::Additive,
+                    feature_info,
+                }
             })
             .collect();
         
@@ -465,8 +627,15 @@ impl ToleranceCommands {
     
     pub async fn add_mate_interactive(&mut self) -> Result<()> {
         let features = self.repository.get_features();
+        let components = self.repository.get_components();
+        
         if features.len() < 2 {
             println!("Need at least 2 features to create a mate.");
+            return Ok(());
+        }
+        
+        if components.is_empty() {
+            println!("No components found. Add components first.");
             return Ok(());
         }
         
@@ -476,17 +645,60 @@ impl ToleranceCommands {
         let description = Text::new("Description:")
             .prompt()?;
         
-        let feature_options: Vec<String> = features.iter()
-            .map(|f| format!("{} - {} ({})", f.name, f.description, f.nominal))
+        // Select primary feature by component first
+        println!("\nSelecting primary feature:");
+        let component_options: Vec<String> = components.iter()
+            .map(|c| format!("{} - {}", c.name, c.description))
             .collect();
         
-        let primary_selection = Select::new("Select primary feature:", feature_options.clone()).prompt()?;
-        let primary_index = feature_options.iter().position(|x| x == &primary_selection).unwrap();
-        let primary_feature = &features[primary_index];
+        let primary_component_selection = Select::new("Select component for primary feature:", component_options.clone()).prompt()?;
+        let primary_component_index = component_options.iter().position(|x| x == &primary_component_selection).unwrap();
+        let primary_component = &components[primary_component_index];
         
-        let secondary_selection = Select::new("Select secondary feature:", feature_options.clone()).prompt()?;
-        let secondary_index = feature_options.iter().position(|x| x == &secondary_selection).unwrap();
-        let secondary_feature = &features[secondary_index];
+        let primary_component_features = self.repository.get_features_for_component(primary_component.id);
+        if primary_component_features.is_empty() {
+            println!("No features found for component '{}'. Add features first.", primary_component.name);
+            return Ok(());
+        }
+        
+        let primary_feature_options: Vec<String> = primary_component_features.iter()
+            .map(|f| format!("{} - {} ({}) [{}]", f.name, f.description, f.nominal, f.feature_category))
+            .collect();
+        
+        let primary_feature_selection = Select::new("Select primary feature:", primary_feature_options.clone()).prompt()?;
+        let primary_feature_index = primary_feature_options.iter().position(|x| x == &primary_feature_selection).unwrap();
+        let primary_feature = &primary_component_features[primary_feature_index];
+        
+        // Select secondary feature by component first
+        println!("\nSelecting secondary feature:");
+        let secondary_component_selection = Select::new("Select component for secondary feature:", component_options.clone()).prompt()?;
+        let secondary_component_index = component_options.iter().position(|x| x == &secondary_component_selection).unwrap();
+        let secondary_component = &components[secondary_component_index];
+        
+        let secondary_component_features = self.repository.get_features_for_component(secondary_component.id);
+        if secondary_component_features.is_empty() {
+            println!("No features found for component '{}'. Add features first.", secondary_component.name);
+            return Ok(());
+        }
+        
+        let secondary_feature_options: Vec<String> = secondary_component_features.iter()
+            .filter(|f| f.id != primary_feature.id) // Exclude the already selected primary feature
+            .map(|f| format!("{} - {} ({}) [{}]", f.name, f.description, f.nominal, f.feature_category))
+            .collect();
+        
+        if secondary_feature_options.is_empty() {
+            println!("No available secondary features (different from primary feature).");
+            return Ok(());
+        }
+        
+        let secondary_feature_selection = Select::new("Select secondary feature:", secondary_feature_options.clone()).prompt()?;
+        let secondary_feature_index = secondary_feature_options.iter().position(|x| x == &secondary_feature_selection).unwrap();
+        
+        // Find the actual feature from the filtered list
+        let available_secondary_features: Vec<_> = secondary_component_features.iter()
+            .filter(|f| f.id != primary_feature.id)
+            .collect();
+        let secondary_feature = available_secondary_features[secondary_feature_index];
         
         if primary_feature.id == secondary_feature.id {
             println!("Primary and secondary features cannot be the same.");
@@ -513,6 +725,9 @@ impl ToleranceCommands {
             .with_default("0.0")
             .prompt()?;
         mate.offset = offset_str.parse().unwrap_or(0.0);
+        
+        // Update mate with descriptive information and fit results
+        mate.update_descriptive_info(primary_feature, primary_component, secondary_feature, secondary_component);
         
         // Validate the mate
         let validation = mate.validate_fit(primary_feature, secondary_feature);
@@ -542,17 +757,56 @@ impl ToleranceCommands {
         Ok(())
     }
     
-    pub fn list_mates(&self) -> Result<()> {
+    pub async fn list_mates_interactive(&self) -> Result<()> {
         let mates = self.repository.get_mates();
         let features = self.repository.get_features();
+        let components = self.repository.get_components();
         
         if mates.is_empty() {
             println!("No mates found");
             return Ok(());
         }
         
+        if components.is_empty() {
+            println!("No components found");
+            return Ok(());
+        }
+        
+        // Ask user to select a component to filter mates
+        let mut component_options: Vec<String> = components.iter()
+            .map(|c| format!("{} - {}", c.name, c.description))
+            .collect();
+        component_options.insert(0, "All components".to_string());
+        
+        let component_selection = Select::new("Select component (or all):", component_options.clone()).prompt()?;
+        
+        let filtered_mates: Vec<&crate::data::Mate> = if component_selection == "All components" {
+            mates.iter().collect()
+        } else {
+            let component_index = component_options.iter().position(|x| x == &component_selection).unwrap() - 1; // -1 because we added "All" at index 0
+            let selected_component = &components[component_index];
+            
+            // Filter mates that involve features from the selected component
+            mates.iter().filter(|mate| {
+                let primary_feature = features.iter().find(|f| f.id == mate.primary_feature);
+                let secondary_feature = features.iter().find(|f| f.id == mate.secondary_feature);
+                
+                match (primary_feature, secondary_feature) {
+                    (Some(pf), Some(sf)) => {
+                        pf.component_id == selected_component.id || sf.component_id == selected_component.id
+                    },
+                    _ => false,
+                }
+            }).collect()
+        };
+        
+        if filtered_mates.is_empty() {
+            println!("No mates found for the selected filter");
+            return Ok(());
+        }
+        
         println!("Mates:");
-        for (i, mate) in mates.iter().enumerate() {
+        for (i, mate) in filtered_mates.iter().enumerate() {
             let primary_feature = features.iter().find(|f| f.id == mate.primary_feature);
             let secondary_feature = features.iter().find(|f| f.id == mate.secondary_feature);
             
@@ -662,25 +916,42 @@ impl ToleranceCommands {
     }
     
     pub async fn edit_feature_interactive(&mut self) -> Result<()> {
-        let features = self.repository.get_features();
-        if features.is_empty() {
-            println!("No features found. Add features first.");
+        let components = self.repository.get_components();
+        if components.is_empty() {
+            println!("No components found. Add components first.");
             return Ok(());
         }
         
-        let feature_options: Vec<String> = features.iter()
+        // First, select the component to narrow down features
+        let component_options: Vec<String> = components.iter()
+            .map(|c| format!("{} - {}", c.name, c.description))
+            .collect();
+        
+        let component_selection = Select::new("Select component:", component_options.clone()).prompt()?;
+        let component_index = component_options.iter().position(|x| x == &component_selection).unwrap();
+        let selected_component = &components[component_index];
+        
+        // Get features for the selected component
+        let component_features = self.repository.get_features_for_component(selected_component.id);
+        if component_features.is_empty() {
+            println!("No features found for component '{}'. Add features first.", selected_component.name);
+            return Ok(());
+        }
+        
+        let feature_options: Vec<String> = component_features.iter()
             .map(|f| format!("{} - {} ({})", f.name, f.description, f.nominal))
             .collect();
         
         let feature_selection = Select::new("Select feature to edit:", feature_options.clone()).prompt()?;
         let feature_index = feature_options.iter().position(|x| x == &feature_selection).unwrap();
-        let mut feature = features[feature_index].clone();
+        let mut feature = component_features[feature_index].clone();
         
         println!("Editing feature: {}", feature.name);
         
         let edit_options = vec![
             "Name",
             "Description",
+            "Feature Category",
             "Nominal Value",
             "Plus Tolerance",
             "Minus Tolerance",
@@ -709,6 +980,29 @@ impl ToleranceCommands {
                     if !new_description.is_empty() {
                         feature.description = new_description;
                         feature.updated = chrono::Utc::now();
+                    }
+                },
+                "Feature Category" => {
+                    let category_options = vec![
+                        "External",
+                        "Internal",
+                    ];
+                    
+                    let current_category = format!("{}", feature.feature_category);
+                    let category_str = Select::new("Feature category:", category_options)
+                        .with_help_message(&format!("Current: {} (External=shafts/pins, Internal=holes/slots)", current_category))
+                        .prompt()?;
+                    
+                    let new_category = match category_str {
+                        "External" => FeatureCategory::External,
+                        "Internal" => FeatureCategory::Internal,
+                        _ => feature.feature_category,
+                    };
+                    
+                    if new_category != feature.feature_category {
+                        feature.feature_category = new_category;
+                        feature.updated = chrono::Utc::now();
+                        println!("✓ Feature category updated to: {}", new_category);
                     }
                 },
                 "Nominal Value" => {
@@ -951,6 +1245,18 @@ impl ToleranceCommands {
             }
         }
         
+        // Update descriptive information before saving
+        let components = self.repository.get_components();
+        if let Some(primary_feature) = features.iter().find(|f| f.id == mate.primary_feature) {
+            if let Some(secondary_feature) = features.iter().find(|f| f.id == mate.secondary_feature) {
+                if let Some(primary_component) = components.iter().find(|c| c.id == primary_feature.component_id) {
+                    if let Some(secondary_component) = components.iter().find(|c| c.id == secondary_feature.component_id) {
+                        mate.update_descriptive_info(primary_feature, primary_component, secondary_feature, secondary_component);
+                    }
+                }
+            }
+        }
+        
         // Update the mate in the repository
         self.repository.update_mate(mate.clone())?;
         
@@ -1054,6 +1360,41 @@ impl ToleranceCommands {
         Ok(())
     }
     
+    async fn configure_feature_contribution(&mut self, stackup: &mut Stackup, feature: &Feature) -> Result<()> {
+        println!("\nConfiguring vector contribution for feature: {} ({:.3})", feature.name, feature.nominal);
+        
+        let direction_options = vec![
+            "Additive (+1.0)",
+            "Subtractive (-1.0)",
+            "Custom multiplier",
+        ];
+        
+        let direction_selection = Select::new("Direction/multiplier:", direction_options).prompt()?;
+        
+        let (direction, contribution_type) = match direction_selection {
+            "Additive (+1.0)" => (1.0, ContributionType::Additive),
+            "Subtractive (-1.0)" => (-1.0, ContributionType::Subtractive),
+            "Custom multiplier" => {
+                let custom_str = Text::new("Enter custom multiplier:")
+                    .with_default("1.0")
+                    .prompt()?;
+                let custom: f64 = custom_str.parse().unwrap_or(1.0);
+                (custom, ContributionType::Custom(custom))
+            },
+            _ => (1.0, ContributionType::Additive),
+        };
+        
+        let half_count = Confirm::new("Half contribution?")
+            .with_default(false)
+            .prompt()?;
+        
+        stackup.update_feature_contribution(feature.id, direction, half_count, contribution_type);
+        
+        println!("✓ Vector contribution configured: {:.2} (half: {})", direction, half_count);
+        
+        Ok(())
+    }
+
     async fn manage_stackup_features(&mut self, stackup: &mut Stackup) -> Result<()> {
         let features = self.repository.get_features();
         
@@ -1086,7 +1427,7 @@ impl ToleranceCommands {
                     let feature_index = feature_options.iter().position(|x| x == &feature_selection).unwrap();
                     let selected_feature = available_features[feature_index];
                     
-                    stackup.add_dimension(selected_feature.id);
+                    stackup.add_dimension(selected_feature.id, selected_feature.name.clone());
                     println!("Added feature: {}", selected_feature.name);
                 },
                 "Remove Feature" => {
@@ -1107,8 +1448,7 @@ impl ToleranceCommands {
                     let feature_index = feature_options.iter().position(|x| x == &feature_selection).unwrap();
                     let selected_feature = current_features[feature_index];
                     
-                    stackup.dimension_chain.retain(|&id| id != selected_feature.id);
-                    stackup.updated = chrono::Utc::now();
+                    stackup.remove_dimension(selected_feature.id);
                     println!("Removed feature: {}", selected_feature.name);
                 },
                 "List Current Features" => {
@@ -1118,7 +1458,14 @@ impl ToleranceCommands {
                         println!("Current features in stackup:");
                         for (i, &feature_id) in stackup.dimension_chain.iter().enumerate() {
                             if let Some(feature) = features.iter().find(|f| f.id == feature_id) {
-                                println!("  {}. {} ({:.3})", i + 1, feature.name, feature.nominal);
+                                let contribution = stackup.feature_contributions.iter().find(|c| c.feature_id == feature_id);
+                                let contribution_info = if let Some(contrib) = contribution {
+                                    let half_info = if contrib.half_count { " (half)" } else { "" };
+                                    format!(" [direction: {:.2}{}]", contrib.direction, half_info)
+                                } else {
+                                    " [no contribution data]".to_string()
+                                };
+                                println!("  {}. {} ({:.3}){}", i + 1, feature.name, feature.nominal, contribution_info);
                             }
                         }
                     }
@@ -1171,6 +1518,118 @@ impl ToleranceCommands {
                          feature.name, feature.nominal, feature.tolerance.plus, feature.tolerance.minus,
                          distribution_info, drawing_location);
             }
+            println!();
+        }
+        
+        Ok(())
+    }
+    
+    pub async fn list_features_interactive(&self) -> Result<()> {
+        let components = self.repository.get_components();
+        if components.is_empty() {
+            println!("No components found. Add components first.");
+            return Ok(());
+        }
+        
+        let features = self.repository.get_features();
+        if features.is_empty() {
+            println!("No features found. Add features first.");
+            return Ok(());
+        }
+        
+        // Ask user to select viewing option
+        let view_options = vec![
+            "List all features",
+            "List features for a specific component",
+        ];
+        
+        let view_selection = Select::new("How would you like to view features?", view_options).prompt()?;
+        
+        match view_selection {
+            "List all features" => {
+                self.list_all_features()?;
+            },
+            "List features for a specific component" => {
+                let component_options: Vec<String> = components.iter()
+                    .map(|c| format!("{} - {}", c.name, c.description))
+                    .collect();
+                
+                let component_selection = Select::new("Select component:", component_options.clone()).prompt()?;
+                let component_index = component_options.iter().position(|x| x == &component_selection).unwrap();
+                let selected_component = &components[component_index];
+                
+                let component_features = self.repository.get_features_for_component(selected_component.id);
+                if component_features.is_empty() {
+                    println!("No features found for component '{}'", selected_component.name);
+                } else {
+                    println!("\nFeatures for component '{}':", selected_component.name);
+                    for (i, feature) in component_features.iter().enumerate() {
+                        let distribution_info = if let Some(ref dist) = feature.distribution {
+                            format!(" [{}]", match dist {
+                                ToleranceDistribution::Normal => "Normal",
+                                ToleranceDistribution::Uniform => "Uniform", 
+                                ToleranceDistribution::Triangular => "Triangular",
+                                ToleranceDistribution::LogNormal => "LogNormal",
+                                ToleranceDistribution::Beta { .. } => "Beta",
+                            })
+                        } else {
+                            String::new()
+                        };
+                        
+                        let drawing_location = feature.drawing_location
+                            .as_ref()
+                            .map(|loc| format!(" @{}", loc))
+                            .unwrap_or_default();
+                        
+                        println!("{}. {} - {} ({:.3} +{:.3}/-{:.3}){}{}",
+                                 i + 1, feature.name, feature.description, 
+                                 feature.nominal, feature.tolerance.plus, feature.tolerance.minus,
+                                 distribution_info, drawing_location);
+                        println!("   Type: {:?}, Category: {}", feature.feature_type, feature.feature_category);
+                        println!("   ID: {}", feature.id);
+                        println!();
+                    }
+                }
+            },
+            _ => {}
+        }
+        
+        Ok(())
+    }
+    
+    fn list_all_features(&self) -> Result<()> {
+        let features = self.repository.get_features();
+        let components = self.repository.get_components();
+        
+        println!("\nAll Features:");
+        for (i, feature) in features.iter().enumerate() {
+            let component = components.iter().find(|c| c.id == feature.component_id);
+            let component_name = component.map(|c| c.name.as_str()).unwrap_or("Unknown");
+            
+            let distribution_info = if let Some(ref dist) = feature.distribution {
+                format!(" [{}]", match dist {
+                    ToleranceDistribution::Normal => "Normal",
+                    ToleranceDistribution::Uniform => "Uniform", 
+                    ToleranceDistribution::Triangular => "Triangular",
+                    ToleranceDistribution::LogNormal => "LogNormal",
+                    ToleranceDistribution::Beta { .. } => "Beta",
+                })
+            } else {
+                String::new()
+            };
+            
+            let drawing_location = feature.drawing_location
+                .as_ref()
+                .map(|loc| format!(" @{}", loc))
+                .unwrap_or_default();
+            
+            println!("{}. {} - {} ({:.3} +{:.3}/-{:.3}){}{}",
+                     i + 1, feature.name, feature.description, 
+                     feature.nominal, feature.tolerance.plus, feature.tolerance.minus,
+                     distribution_info, drawing_location);
+            println!("   Component: {}", component_name);
+            println!("   Type: {:?}, Category: {}", feature.feature_type, feature.feature_category);
+            println!("   ID: {}", feature.id);
             println!();
         }
         
@@ -1261,6 +1720,34 @@ impl ToleranceCommands {
                 }
             }
         }
+        
+        Ok(())
+    }
+
+    pub async fn view_analysis_interactive(&mut self) -> Result<()> {
+        let analyses = self.repository.get_analyses();
+        if analyses.is_empty() {
+            println!("No analysis results found. Run stackup analyses first.");
+            return Ok(());
+        }
+        
+        // Create display options for each analysis
+        let analysis_options: Vec<String> = analyses.iter()
+            .map(|a| format!("{} - {} ({:?}) [{}]", 
+                a.stackup_name, 
+                a.created.format("%Y-%m-%d %H:%M:%S"),
+                a.config.method,
+                if a.results.cp >= 1.33 { "Good" } else if a.results.cp >= 1.0 { "Fair" } else { "Poor" }
+            ))
+            .collect();
+        
+        // Allow user to select an analysis to view
+        let analysis_selection = Select::new("Select analysis to view:", analysis_options.clone()).prompt()?;
+        let analysis_index = analysis_options.iter().position(|x| x == &analysis_selection).unwrap();
+        let selected_analysis = &analyses[analysis_index];
+        
+        // Display the selected analysis results
+        self.display_analysis_results(selected_analysis);
         
         Ok(())
     }

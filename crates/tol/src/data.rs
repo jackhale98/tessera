@@ -79,10 +79,37 @@ pub enum FeatureType {
     Other,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum FeatureCategory {
     External, // External features (shafts, pins, etc.)
     Internal, // Internal features (holes, slots, etc.)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeatureInfo {
+    pub feature_name: String,
+    pub feature_description: String,
+    pub component_name: String,
+    pub component_description: String,
+    pub feature_category: FeatureCategory,
+    pub nominal: f64,
+    pub tolerance_plus: f64,
+    pub tolerance_minus: f64,
+}
+
+impl FeatureInfo {
+    pub fn from_feature_and_component(feature: &Feature, component: &Component) -> Self {
+        Self {
+            feature_name: feature.name.clone(),
+            feature_description: feature.description.clone(),
+            component_name: component.name.clone(),
+            component_description: component.description.clone(),
+            feature_category: feature.feature_category,
+            nominal: feature.nominal,
+            tolerance_plus: feature.tolerance.plus,
+            tolerance_minus: feature.tolerance.minus,
+        }
+    }
 }
 
 impl std::fmt::Display for FeatureCategory {
@@ -268,6 +295,11 @@ pub struct Mate {
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
     pub metadata: IndexMap<String, String>,
+    
+    // Descriptive information for git-friendly diffs
+    pub primary_feature_info: FeatureInfo,
+    pub secondary_feature_info: FeatureInfo,
+    pub fit_results: Option<FitValidation>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -331,20 +363,59 @@ impl Mate {
             created: now,
             updated: now,
             metadata: IndexMap::new(),
+            
+            // Initialize with placeholder info - will be updated with actual data
+            primary_feature_info: FeatureInfo {
+                feature_name: "Unknown".to_string(),
+                feature_description: "Unknown".to_string(),
+                component_name: "Unknown".to_string(),
+                component_description: "Unknown".to_string(),
+                feature_category: FeatureCategory::External,
+                nominal: 0.0,
+                tolerance_plus: 0.0,
+                tolerance_minus: 0.0,
+            },
+            secondary_feature_info: FeatureInfo {
+                feature_name: "Unknown".to_string(),
+                feature_description: "Unknown".to_string(),
+                component_name: "Unknown".to_string(),
+                component_description: "Unknown".to_string(),
+                feature_category: FeatureCategory::External,
+                nominal: 0.0,
+                tolerance_plus: 0.0,
+                tolerance_minus: 0.0,
+            },
+            fit_results: None,
         }
+    }
+    
+    pub fn update_descriptive_info(&mut self, 
+                                   primary_feature: &Feature, 
+                                   primary_component: &Component,
+                                   secondary_feature: &Feature, 
+                                   secondary_component: &Component) {
+        self.primary_feature_info = FeatureInfo::from_feature_and_component(primary_feature, primary_component);
+        self.secondary_feature_info = FeatureInfo::from_feature_and_component(secondary_feature, secondary_component);
+        
+        // Calculate and store fit results
+        self.fit_results = Some(self.validate_fit(primary_feature, secondary_feature));
+        self.updated = Utc::now();
     }
 
     pub fn calculate_nominal_fit(&self, primary_feature: &Feature, secondary_feature: &Feature) -> f64 {
         match (primary_feature.feature_type, secondary_feature.feature_type) {
             (FeatureType::Diameter, FeatureType::Diameter) => {
-                match self.mate_type {
-                    MateType::Clearance | MateType::Transition => {
-                        secondary_feature.nominal - primary_feature.nominal
-                    },
-                    MateType::Interference => {
-                        primary_feature.nominal - secondary_feature.nominal
-                    },
-                }
+                // Determine which feature is internal (hole) and which is external (pin)
+                let (internal_feature, external_feature) = match (primary_feature.feature_category, secondary_feature.feature_category) {
+                    (FeatureCategory::Internal, FeatureCategory::External) => (primary_feature, secondary_feature),
+                    (FeatureCategory::External, FeatureCategory::Internal) => (secondary_feature, primary_feature),
+                    // If both are same category, treat primary as internal for calculation purposes
+                    _ => (primary_feature, secondary_feature),
+                };
+                
+                // For all mate types, nominal fit is: hole_nominal - pin_nominal
+                // Positive values indicate clearance, negative values indicate interference
+                internal_feature.nominal - external_feature.nominal
             },
             _ => self.offset,
         }
@@ -354,18 +425,17 @@ impl Mate {
     pub fn calculate_mmc_fit(&self, primary_feature: &Feature, secondary_feature: &Feature) -> f64 {
         match (primary_feature.feature_type, secondary_feature.feature_type) {
             (FeatureType::Diameter, FeatureType::Diameter) => {
-                match self.mate_type {
-                    MateType::Clearance | MateType::Transition => {
-                        // For clearance/transition fits, MMC condition is:
-                        // Internal feature at MMC (smallest) - External feature at MMC (largest)
-                        secondary_feature.mmc() - primary_feature.mmc()
-                    },
-                    MateType::Interference => {
-                        // For interference fits, MMC condition is:
-                        // External feature at MMC (largest) - Internal feature at MMC (smallest)
-                        primary_feature.mmc() - secondary_feature.mmc()
-                    },
-                }
+                // Determine which feature is internal (hole) and which is external (pin)
+                let (internal_feature, external_feature) = match (primary_feature.feature_category, secondary_feature.feature_category) {
+                    (FeatureCategory::Internal, FeatureCategory::External) => (primary_feature, secondary_feature),
+                    (FeatureCategory::External, FeatureCategory::Internal) => (secondary_feature, primary_feature),
+                    // If both are same category, treat primary as internal for calculation purposes
+                    _ => (primary_feature, secondary_feature),
+                };
+                
+                // MMC condition is always: Internal feature at MMC (smallest) - External feature at MMC (largest)
+                // This represents the tightest possible fit regardless of intended mate type
+                internal_feature.mmc() - external_feature.mmc()
             },
             _ => self.offset,
         }
@@ -375,18 +445,17 @@ impl Mate {
     pub fn calculate_lmc_fit(&self, primary_feature: &Feature, secondary_feature: &Feature) -> f64 {
         match (primary_feature.feature_type, secondary_feature.feature_type) {
             (FeatureType::Diameter, FeatureType::Diameter) => {
-                match self.mate_type {
-                    MateType::Clearance | MateType::Transition => {
-                        // For clearance/transition fits, LMC condition is:
-                        // Internal feature at LMC (largest) - External feature at LMC (smallest)
-                        secondary_feature.lmc() - primary_feature.lmc()
-                    },
-                    MateType::Interference => {
-                        // For interference fits, LMC condition is:
-                        // External feature at LMC (smallest) - Internal feature at LMC (largest)
-                        primary_feature.lmc() - secondary_feature.lmc()
-                    },
-                }
+                // Determine which feature is internal (hole) and which is external (pin)
+                let (internal_feature, external_feature) = match (primary_feature.feature_category, secondary_feature.feature_category) {
+                    (FeatureCategory::Internal, FeatureCategory::External) => (primary_feature, secondary_feature),
+                    (FeatureCategory::External, FeatureCategory::Internal) => (secondary_feature, primary_feature),
+                    // If both are same category, treat primary as internal for calculation purposes
+                    _ => (primary_feature, secondary_feature),
+                };
+                
+                // LMC condition is always: Internal feature at LMC (largest) - External feature at LMC (smallest)
+                // This represents the loosest possible fit regardless of intended mate type
+                internal_feature.lmc() - external_feature.lmc()
             },
             _ => self.offset,
         }
@@ -469,7 +538,7 @@ impl Mate {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FitValidation {
     pub is_valid: bool,
     pub nominal_fit: f64,
@@ -484,11 +553,15 @@ pub struct Stackup {
     pub name: String,
     pub description: String,
     pub dimension_chain: Vec<Id>, // Feature IDs in the chain
+    pub feature_contributions: Vec<FeatureContribution>, // Vector contributions for each feature
     pub target_dimension: f64,
     pub tolerance_target: Tolerance,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
     pub metadata: IndexMap<String, String>,
+    
+    // Descriptive information for git-friendly diffs
+    pub dimension_chain_info: Vec<FeatureInfo>, // Detailed info for each feature in the chain
 }
 
 impl Entity for Stackup {
@@ -523,6 +596,7 @@ impl Stackup {
             name,
             description,
             dimension_chain: Vec::new(),
+            feature_contributions: Vec::new(),
             target_dimension,
             tolerance_target: Tolerance {
                 plus: 0.1,
@@ -532,11 +606,86 @@ impl Stackup {
             created: now,
             updated: now,
             metadata: IndexMap::new(),
+            dimension_chain_info: Vec::new(),
         }
     }
     
-    pub fn add_dimension(&mut self, feature_id: Id) {
+    pub fn add_dimension(&mut self, feature_id: Id, feature_name: String) {
         self.dimension_chain.push(feature_id);
+        // Add default contribution with placeholder feature info
+        self.feature_contributions.push(FeatureContribution {
+            feature_id,
+            feature_name: feature_name.clone(),
+            direction: 1.0,
+            half_count: false,
+            contribution_type: ContributionType::Additive,
+            feature_info: FeatureInfo {
+                feature_name: feature_name.clone(),
+                feature_description: "Unknown".to_string(),
+                component_name: "Unknown".to_string(),
+                component_description: "Unknown".to_string(),
+                feature_category: FeatureCategory::External,
+                nominal: 0.0,
+                tolerance_plus: 0.0,
+                tolerance_minus: 0.0,
+            },
+        });
+        
+        // Add placeholder dimension chain info
+        self.dimension_chain_info.push(FeatureInfo {
+            feature_name,
+            feature_description: "Unknown".to_string(),
+            component_name: "Unknown".to_string(),
+            component_description: "Unknown".to_string(),
+            feature_category: FeatureCategory::External,
+            nominal: 0.0,
+            tolerance_plus: 0.0,
+            tolerance_minus: 0.0,
+        });
+        
+        self.updated = Utc::now();
+    }
+    
+    pub fn update_feature_contribution(&mut self, feature_id: Id, direction: f64, half_count: bool, contribution_type: ContributionType) {
+        if let Some(contribution) = self.feature_contributions.iter_mut().find(|c| c.feature_id == feature_id) {
+            contribution.direction = direction;
+            contribution.half_count = half_count;
+            contribution.contribution_type = contribution_type;
+            self.updated = Utc::now();
+        }
+    }
+    
+    pub fn remove_dimension(&mut self, feature_id: Id) {
+        self.dimension_chain.retain(|&id| id != feature_id);
+        self.feature_contributions.retain(|c| c.feature_id != feature_id);
+        self.dimension_chain_info.retain(|info| {
+            // Find feature by name since we don't have direct ID access in FeatureInfo
+            // This will need to be called with proper feature lookup
+            true // For now, retain all - will be properly handled in update_descriptive_info
+        });
+        self.updated = Utc::now();
+    }
+    
+    pub fn update_descriptive_info(&mut self, features: &[Feature], components: &[Component]) {
+        // Update dimension chain info
+        self.dimension_chain_info.clear();
+        for &feature_id in &self.dimension_chain {
+            if let Some(feature) = features.iter().find(|f| f.id == feature_id) {
+                if let Some(component) = components.iter().find(|c| c.id == feature.component_id) {
+                    self.dimension_chain_info.push(FeatureInfo::from_feature_and_component(feature, component));
+                }
+            }
+        }
+        
+        // Update feature contributions info
+        for contribution in &mut self.feature_contributions {
+            if let Some(feature) = features.iter().find(|f| f.id == contribution.feature_id) {
+                if let Some(component) = components.iter().find(|c| c.id == feature.component_id) {
+                    contribution.feature_info = FeatureInfo::from_feature_and_component(feature, component);
+                }
+            }
+        }
+        
         self.updated = Utc::now();
     }
 }
@@ -545,6 +694,7 @@ impl Stackup {
 pub struct StackupAnalysis {
     pub stackup_id: Id,
     pub stackup_name: String,
+    pub target_dimension: f64,
     pub config: AnalysisConfig,
     pub feature_contributions: Vec<FeatureContribution>,
     pub results: AnalysisResults,
@@ -558,6 +708,9 @@ pub struct FeatureContribution {
     pub direction: f64, // +1.0, -1.0, or custom multiplier
     pub half_count: bool, // For partial contributions
     pub contribution_type: ContributionType,
+    
+    // Descriptive information for git-friendly diffs
+    pub feature_info: FeatureInfo,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -577,7 +730,8 @@ impl Default for ContributionType {
 pub struct AnalysisConfig {
     pub method: AnalysisMethod,
     pub simulations: usize,
-    pub confidence_level: f64,
+    pub confidence_level: f64, // User-specified confidence level (e.g., 0.95 for 95%)
+    pub use_three_sigma: bool, // Whether to also calculate 3-sigma limits
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -590,12 +744,27 @@ pub enum AnalysisMethod {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalysisResults {
     pub nominal_dimension: f64,
-    pub predicted_tolerance: Tolerance,
+    pub predicted_tolerance: Tolerance, // Based on 3-sigma or user-specified confidence
+    pub three_sigma_tolerance: Option<Tolerance>, // Always calculated 3-sigma limits
+    pub user_specified_tolerance: Option<Tolerance>, // User confidence level limits
     pub cp: f64, // Process capability
     pub cpk: f64, // Process capability index
     pub sigma_level: f64,
     pub yield_percentage: f64,
-    pub distribution_data: Option<Vec<f64>>, // For Monte Carlo
+    pub distribution_data_file: Option<String>, // CSV file path for Monte Carlo simulation data
+    pub quartile_data: Option<QuartileData>, // Quartile analysis for Monte Carlo
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuartileData {
+    pub minimum: f64,
+    pub q1: f64,       // 25th percentile
+    pub median: f64,   // 50th percentile (Q2)
+    pub q3: f64,       // 75th percentile
+    pub maximum: f64,
+    pub iqr: f64,      // Interquartile range (Q3 - Q1)
+    pub p5: f64,       // 5th percentile
+    pub p95: f64,      // 95th percentile
 }
 
 impl Default for AnalysisConfig {
@@ -604,6 +773,7 @@ impl Default for AnalysisConfig {
             method: AnalysisMethod::MonteCarlo,
             simulations: 10000,
             confidence_level: 0.95,
+            use_three_sigma: true, // Default to providing both 3-sigma and confidence intervals
         }
     }
 }

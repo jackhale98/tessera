@@ -1,0 +1,41 @@
+(
+    id: "01234567-89ab-cdef-0123-456789abcdef",
+    name: "Pin-Hole Assembly Fit",
+    description: "Critical clearance fit between main shaft pin and housing hole",
+    mate_type: Clearance,
+    primary_feature: "11111111-2222-3333-4444-555555555555",
+    secondary_feature: "66666666-7777-8888-9999-000000000000",
+    offset: 0.0,
+    created: "2024-01-15T10:30:00Z",
+    updated: "2024-01-15T14:45:23Z",
+    metadata: {},
+    
+    // Human-readable information for git review
+    primary_feature_info: (
+        feature_name: "Main Shaft Pin",
+        feature_description: "Primary drive shaft outer diameter for bearing interface",
+        component_name: "Drive Shaft Assembly",
+        component_description: "Main rotating shaft with integrated bearing surfaces",
+        feature_category: External,
+        nominal: 25.000,
+        tolerance_plus: 0.013,
+        tolerance_minus: 0.000,
+    ),
+    secondary_feature_info: (
+        feature_name: "Housing Bore",
+        feature_description: "Precision machined hole for shaft bearing installation",
+        component_name: "Motor Housing",
+        component_description: "Cast aluminum housing with machined bearing surfaces",
+        feature_category: Internal,
+        nominal: 25.040,
+        tolerance_plus: 0.020,
+        tolerance_minus: 0.000,
+    ),
+    fit_results: Some((
+        is_valid: true,
+        nominal_fit: 0.040,     // Positive = clearance
+        min_fit: 0.027,         // MMC condition (tightest fit)
+        max_fit: 0.060,         // LMC condition (loosest fit)
+        error_message: None,
+    )),
+)
