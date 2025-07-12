@@ -1,8 +1,10 @@
 use crate::{RiskCommands, utils::truncate_string};
+use crate::impact_service::get_impact_service;
 use colored::Colorize;
 use comfy_table::Table;
 use tessera_core::{ProjectContext, Result};
 use inquire::{Select, Text};
+use tessera_impact::{ModuleType, ChangeType};
 use tessera_risk::*;
 
 pub async fn execute_risk_command(command: RiskCommands, project_ctx: ProjectContext) -> Result<()> {
@@ -65,6 +67,17 @@ async fn add_risk_interactive(project_ctx: ProjectContext) -> Result<()> {
     let mut repo = RiskRepository::load_from_directory(&risk_dir)?;
     repo.add_risk(risk.clone())?;
     repo.save_to_directory(&risk_dir)?;
+    
+    // Trigger automatic impact analysis
+    if let Ok(mut service) = std::panic::catch_unwind(|| get_impact_service()) {
+        let _ = service.on_entity_changed(
+            &risk,
+            ModuleType::Risk,
+            "Risk".to_string(),
+            ChangeType::Created,
+            &project_ctx,
+        ).await;
+    }
     
     println!("{} Risk '{}' added successfully!", "✓".green(), risk.name);
     println!("ID: {}", risk.id);
@@ -238,6 +251,17 @@ async fn edit_risk_interactive(project_ctx: ProjectContext) -> Result<()> {
     repo.update_risk(risk.clone())?;
     repo.save_to_directory(&risk_dir)?;
     
+    // Trigger automatic impact analysis
+    if let Ok(mut service) = std::panic::catch_unwind(|| get_impact_service()) {
+        let _ = service.on_entity_changed(
+            &risk,
+            ModuleType::Risk,
+            "Risk".to_string(),
+            ChangeType::Updated,
+            &project_ctx,
+        ).await;
+    }
+    
     println!("{} Risk '{}' updated successfully!", "✓".green(), risk_name);
     Ok(())
 }
@@ -302,6 +326,17 @@ async fn add_control_interactive(project_ctx: ProjectContext) -> Result<()> {
     let mut repo = RiskRepository::load_from_directory(&risk_dir)?;
     repo.add_design_control(control.clone())?;
     repo.save_to_directory(&risk_dir)?;
+    
+    // Trigger automatic impact analysis
+    if let Ok(mut service) = std::panic::catch_unwind(|| get_impact_service()) {
+        let _ = service.on_entity_changed(
+            &control,
+            ModuleType::Risk,
+            "DesignControl".to_string(),
+            ChangeType::Created,
+            &project_ctx,
+        ).await;
+    }
     
     println!("{} Design control '{}' added successfully!", "✓".green(), control.name);
     println!("ID: {}", control.id);
@@ -456,6 +491,17 @@ async fn edit_control_interactive(project_ctx: ProjectContext) -> Result<()> {
     
     repo.update_design_control(control.clone())?;
     repo.save_to_directory(&risk_dir)?;
+    
+    // Trigger automatic impact analysis
+    if let Ok(mut service) = std::panic::catch_unwind(|| get_impact_service()) {
+        let _ = service.on_entity_changed(
+            &control,
+            ModuleType::Risk,
+            "DesignControl".to_string(),
+            ChangeType::Updated,
+            &project_ctx,
+        ).await;
+    }
     
     println!("{} Design control '{}' updated successfully!", "✓".green(), control_name);
     Ok(())

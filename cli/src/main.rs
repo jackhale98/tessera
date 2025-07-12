@@ -6,10 +6,12 @@ use std::path::PathBuf;
 mod commands;
 mod interactive;
 mod utils;
+mod impact_service;
 
 use commands::{
     execute_requirements_command, execute_risk_command, execute_verification_command,
-    execute_quality_command, execute_pm_command, execute_tol_command, execute_team_command, execute_link_command
+    execute_quality_command, execute_pm_command, execute_tol_command, execute_team_command, 
+    execute_impact_command, execute_link_command
 };
 use interactive::*;
 
@@ -79,6 +81,12 @@ enum Commands {
     Team {
         #[command(subcommand)]
         command: TeamCommands,
+    },
+    
+    /// Impact analysis and lifecycle management
+    Impact {
+        #[command(subcommand)]
+        command: ImpactCommands,
     },
     
     /// Interactive mode
@@ -520,6 +528,66 @@ enum TeamCommands {
     Dashboard,
 }
 
+#[derive(Subcommand, Clone)]
+enum ImpactCommands {
+    /// List automatically generated impact analyses
+    #[command(name = "list")]
+    ListAnalyses,
+    
+    /// Show details of a specific impact analysis
+    #[command(name = "show")]
+    ShowAnalysis {
+        /// Analysis ID
+        analysis_id: String,
+    },
+    
+    /// Show recent change events
+    #[command(name = "events")]
+    ShowEvents,
+    
+    /// Show impact analysis for a specific entity
+    #[command(name = "entity")]
+    ShowEntityImpacts {
+        /// Entity ID
+        entity_id: String,
+    },
+    
+    /// List pending approvals requiring action
+    #[command(name = "approvals")]
+    ListApprovals,
+    
+    /// Process an approval workflow
+    #[command(name = "approve")]
+    ProcessApproval {
+        /// Workflow ID
+        workflow_id: String,
+        /// Decision (approved, rejected, changes)
+        #[arg(short, long)]
+        decision: String,
+        /// Optional comments
+        #[arg(short, long)]
+        comments: Option<String>,
+    },
+    
+    /// List active Git workflows
+    #[command(name = "workflows")]
+    ListWorkflows,
+    
+    /// Show workflow details
+    #[command(name = "workflow")]
+    ShowWorkflow {
+        /// Workflow ID
+        workflow_id: String,
+    },
+    
+    /// Configure automatic impact analysis settings
+    #[command(name = "config")]
+    Configure,
+    
+    /// Show impact analysis dashboard and statistics
+    Dashboard,
+}
+
 #[derive(Subcommand)]
 enum LinkCommands {
     /// Add a cross-module link
@@ -582,6 +650,11 @@ async fn main() -> Result<()> {
         Some(Commands::Team { command }) => {
             let project_ctx = load_project_context(cli.project)?;
             execute_team_command(command, project_ctx).await?;
+        },
+        
+        Some(Commands::Impact { command }) => {
+            let project_ctx = load_project_context(cli.project)?;
+            execute_impact_command(command, project_ctx).await?;
         },
         
         Some(Commands::Interactive { module }) => {

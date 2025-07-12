@@ -1,0 +1,29 @@
+[package]
+name = "tessera-impact"
+version = "0.1.0"
+edition = "2021"
+authors = ["Tessera Team"]
+description = "Cross-module impact analysis and Git workflow orchestration for Tessera"
+
+[dependencies]
+tessera-core = { path = "../core" }
+tessera-team = { path = "../tessera-team" }
+tessera-requirements = { path = "../requirements" }
+tessera-risk = { path = "../risk" }
+tessera-verification = { path = "../verification" }
+tessera-pm = { path = "../pm" }
+tessera-tol = { path = "../tol" }
+
+serde = { version = "1.0", features = ["derive"] }
+ron = "0.8"
+uuid = { version = "1.10", features = ["serde", "v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+indexmap = { version = "2.0", features = ["serde"] }
+git2 = "0.18"
+colored = "2.1"
+comfy-table = "7.1"
+thiserror = "1.0"
+petgraph = "0.6"
+
+[dev-dependencies]
+tempfile = "3.8"

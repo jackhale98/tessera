@@ -725,6 +725,7 @@ impl Stackup {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StackupAnalysis {
+    pub id: Id,
     pub stackup_id: Id,
     pub stackup_name: String,
     pub target_dimension: f64,
@@ -732,6 +733,25 @@ pub struct StackupAnalysis {
     pub feature_contributions: Vec<FeatureContribution>,
     pub results: AnalysisResults,
     pub created: DateTime<Utc>,
+}
+
+impl Entity for StackupAnalysis {
+    fn id(&self) -> Id {
+        self.id
+    }
+    
+    fn name(&self) -> &str {
+        &self.stackup_name
+    }
+    
+    fn validate(&self) -> Result<()> {
+        if self.stackup_name.is_empty() {
+            return Err(tessera_core::DesignTrackError::Validation(
+                "Analysis stackup name cannot be empty".to_string()
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -2153,7 +2153,7 @@ impl ToleranceCommands {
             .prompt()?;
         
         if confirm_delete {
-            self.repository.delete_analysis(selected_analysis.created)?;
+            self.repository.delete_analysis(selected_analysis.id)?;
             
             let tol_dir = self.project_context.module_path("tol");
             self.repository.save_to_directory(&tol_dir)?;
@@ -2164,5 +2164,26 @@ impl ToleranceCommands {
         }
         
         Ok(())
+    }
+
+    // Getter methods for impact analysis
+    pub fn get_components(&self) -> &[Component] {
+        self.repository.get_components()
+    }
+
+    pub fn get_features(&self) -> &[Feature] {
+        self.repository.get_features()
+    }
+
+    pub fn get_mates(&self) -> &[Mate] {
+        self.repository.get_mates()
+    }
+
+    pub fn get_stackups(&self) -> &[Stackup] {
+        self.repository.get_stackups()
+    }
+
+    pub fn get_analyses(&self) -> &[StackupAnalysis] {
+        self.repository.get_analyses()
     }
 }

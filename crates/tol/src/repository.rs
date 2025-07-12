@@ -211,8 +211,8 @@ impl ToleranceRepository {
         self.analyses.iter().filter(|a| a.stackup_id == stackup_id).collect()
     }
     
-    pub fn delete_analysis(&mut self, analysis_created: chrono::DateTime<chrono::Utc>) -> Result<()> {
-        if let Some(pos) = self.analyses.iter().position(|a| a.created == analysis_created) {
+    pub fn delete_analysis(&mut self, analysis_id: Id) -> Result<()> {
+        if let Some(pos) = self.analyses.iter().position(|a| a.id == analysis_id) {
             let removed_analysis = self.analyses.remove(pos);
             println!("✓ Removed analysis '{}' created on {}", 
                      removed_analysis.stackup_name,

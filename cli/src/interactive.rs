@@ -1,8 +1,8 @@
 use crate::commands::{
     execute_requirements_command, execute_risk_command, execute_verification_command,
-    execute_pm_command, execute_tol_command, execute_team_command
+    execute_pm_command, execute_tol_command, execute_team_command, execute_impact_command
 };
-use crate::{RequirementsCommands, RiskCommands, VerificationCommands, PmCommands, TolCommands, TeamCommands};
+use crate::{RequirementsCommands, RiskCommands, VerificationCommands, PmCommands, TolCommands, TeamCommands, ImpactCommands};
 use colored::Colorize;
 use tessera_core::{ProjectContext, Result};
 use inquire::Select;
@@ -36,6 +36,10 @@ pub async fn run_interactive_mode(mut project_ctx: ProjectContext, module: Optio
             project_ctx.set_current_module("team".to_string());
             run_team_interactive(project_ctx).await?;
         },
+        Some(ref m) if m == "impact" => {
+            project_ctx.set_current_module("impact".to_string());
+            run_impact_interactive(project_ctx).await?;
+        },
         Some(ref m) => {
             println!("{} Module '{}' not recognized", "⚠".yellow(), m);
         },
@@ -56,6 +60,7 @@ async fn run_main_interactive(project_ctx: ProjectContext) -> Result<()> {
             "Risk Management",
             "Tolerance Analysis",
             "Verification & Testing",
+            "Impact Analysis",
             "Program Status",
             "Exit",
         ];
@@ -82,6 +87,9 @@ async fn run_main_interactive(project_ctx: ProjectContext) -> Result<()> {
             },
             "Verification & Testing" => {
                 run_verification_interactive(project_ctx.clone()).await?;
+            },
+            "Impact Analysis" => {
+                run_impact_interactive(project_ctx.clone()).await?;
             },
             "Program Status" => {
                 show_program_status(&project_ctx)?;
@@ -1224,4 +1232,134 @@ async fn run_pm_critical_path_menu(project_ctx: ProjectContext) -> Result<()> {
     }
     
     Ok(())
+}
+
+async fn run_impact_interactive(project_ctx: ProjectContext) -> Result<()> {
+    
+    loop {
+        println!("\n{}", "Automatic Impact Analysis Dashboard".bold().blue());
+        println!("View automatically generated impact analyses and manage approval workflows");
+        
+        let options = vec![
+            "📋 View Impact Analyses", 
+            "📅 Show Recent Changes",
+            "📊 Show Analysis Details",
+            "🎯 Show Entity Impacts",
+            "✅ List Pending Approvals",
+            "⚙️  Process Approval",
+            "🌿 List Git Workflows",
+            "📈 Show Workflow Details",
+            "⚙️  Configure Automatic Analysis",
+            "📊 Dashboard & Statistics",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select action:", options)
+            .with_help_message("Choose what to view or manage")
+            .prompt()?;
+        
+        let result = match selection {
+            "📋 View Impact Analyses" => {
+                execute_impact_command(ImpactCommands::ListAnalyses, project_ctx.clone()).await
+            },
+            "📅 Show Recent Changes" => {
+                execute_impact_command(ImpactCommands::ShowEvents, project_ctx.clone()).await
+            },
+            "📊 Show Analysis Details" => {
+                show_analysis_details_interactive(project_ctx.clone()).await
+            },
+            "🎯 Show Entity Impacts" => {
+                show_entity_impacts_interactive(project_ctx.clone()).await
+            },
+            "✅ List Pending Approvals" => {
+                execute_impact_command(ImpactCommands::ListApprovals, project_ctx.clone()).await
+            },
+            "⚙️  Process Approval" => {
+                process_approval_interactive(project_ctx.clone()).await
+            },
+            "🌿 List Git Workflows" => {
+                execute_impact_command(ImpactCommands::ListWorkflows, project_ctx.clone()).await
+            },
+            "📈 Show Workflow Details" => {
+                show_workflow_details_interactive(project_ctx.clone()).await
+            },
+            "⚙️  Configure Automatic Analysis" => {
+                execute_impact_command(ImpactCommands::Configure, project_ctx.clone()).await
+            },
+            "📊 Dashboard & Statistics" => {
+                execute_impact_command(ImpactCommands::Dashboard, project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+async fn show_entity_impacts_interactive(project_ctx: ProjectContext) -> Result<()> {
+    use inquire::Text;
+    
+    let entity_id = Text::new("Entity ID:")
+        .with_help_message("Enter the entity ID to view its impact analyses")
+        .prompt()?;
+    
+    execute_impact_command(ImpactCommands::ShowEntityImpacts { entity_id }, project_ctx).await
+}
+
+async fn show_analysis_details_interactive(project_ctx: ProjectContext) -> Result<()> {
+    use inquire::Text;
+    
+    let analysis_id = Text::new("Analysis ID:")
+        .with_help_message("Enter the impact analysis ID")
+        .prompt()?;
+    
+    execute_impact_command(ImpactCommands::ShowAnalysis { analysis_id }, project_ctx).await
+}
+
+// Removed request_transition_interactive - state transitions should happen through entity lifecycle management
+
+async fn process_approval_interactive(project_ctx: ProjectContext) -> Result<()> {
+    use inquire::{Text, Select};
+    
+    println!("{}", "Process Approval".bold().blue());
+    
+    let workflow_id = Text::new("Workflow ID:")
+        .with_help_message("Enter the approval workflow ID")
+        .prompt()?;
+    
+    let decision = Select::new("Decision:", vec![
+        "approved", "rejected", "changes"
+    ])
+    .with_help_message("Choose your approval decision")
+    .prompt()?;
+    
+    let comments = Text::new("Comments (optional):")
+        .with_help_message("Add any comments for this approval")
+        .with_default("")
+        .prompt()?;
+    
+    let comments = if comments.is_empty() { None } else { Some(comments) };
+    
+    execute_impact_command(ImpactCommands::ProcessApproval {
+        workflow_id,
+        decision: decision.to_string(),
+        comments,
+    }, project_ctx).await
+}
+
+async fn show_workflow_details_interactive(project_ctx: ProjectContext) -> Result<()> {
+    use inquire::Text;
+    
+    let workflow_id = Text::new("Workflow ID:")
+        .with_help_message("Enter the Git workflow ID")
+        .prompt()?;
+    
+    execute_impact_command(ImpactCommands::ShowWorkflow { workflow_id }, project_ctx).await
 }

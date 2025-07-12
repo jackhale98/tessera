@@ -1710,7 +1710,9 @@ dependencies = [
  "console",
  "dirs",
  "inquire",
+ "ron",
  "tessera-core",
+ "tessera-impact",
  "tessera-pm",
  "tessera-quality",
  "tessera-requirements",
@@ -1736,6 +1738,30 @@ dependencies = [
  "thiserror",
  "uuid",
  "walkdir",
+]
+
+[[package]]
+name = "tessera-impact"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "colored",
+ "comfy-table",
+ "git2",
+ "indexmap",
+ "petgraph",
+ "ron",
+ "serde",
+ "tempfile",
+ "tessera-core",
+ "tessera-pm",
+ "tessera-requirements",
+ "tessera-risk",
+ "tessera-team",
+ "tessera-tol",
+ "tessera-verification",
+ "thiserror",
+ "uuid",
 ]
 
 [[package]]

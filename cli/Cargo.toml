@@ -16,6 +16,7 @@ tessera-quality = { path = "../crates/quality" }
 tessera-pm = { path = "../crates/pm" }
 tessera-tol = { path = "../crates/tol" }
 tessera-team = { path = "../crates/tessera-team" }
+tessera-impact = { path = "../crates/tessera-impact" }
 clap = { workspace = true }
 inquire = { workspace = true }
 anyhow = { workspace = true }
@@ -25,3 +26,4 @@ console = { workspace = true }
 tokio = { version = "1.0", features = ["full"] }
 dirs = { workspace = true }
 chrono = { workspace = true }
+ron = { workspace = true }

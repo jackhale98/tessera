@@ -23,6 +23,35 @@ impl ProjectCommands {
         })
     }
     
+    // Public getter methods for impact analysis
+    pub fn get_tasks(&self) -> &[Task] {
+        self.repository.get_tasks()
+    }
+    
+    pub fn get_resources(&self) -> &[Resource] {
+        self.repository.get_resources()
+    }
+    
+    pub fn get_milestones(&self) -> &[Milestone] {
+        self.repository.get_milestones()
+    }
+    
+    pub fn get_risks(&self) -> &[crate::risk::ProjectRisk] {
+        self.repository.get_risks()
+    }
+    
+    pub fn get_issues(&self) -> &[crate::issue::Issue] {
+        self.repository.get_issues()
+    }
+    
+    pub fn get_baselines(&self) -> &[crate::baseline::ProjectBaseline] {
+        self.repository.get_baselines()
+    }
+    
+    pub fn get_calendars(&self) -> &[crate::calendar::Calendar] {
+        self.repository.get_calendars()
+    }
+    
     pub async fn add_task_interactive(&mut self) -> Result<()> {
         let name = Text::new("Task name:")
             .with_help_message("Enter a name for the task")

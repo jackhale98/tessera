@@ -7,6 +7,8 @@ use std::path::Path;
 use std::fs;
 
 use crate::TeamCommands;
+use crate::impact_service::get_impact_service;
+use tessera_impact::{ModuleType, ChangeType};
 
 pub async fn execute_team_command(command: TeamCommands, project_ctx: ProjectContext) -> Result<()> {
     match command {
@@ -221,6 +223,17 @@ async fn add_team_member(project_ctx: &ProjectContext) -> Result<()> {
     repository.add_team_member(member.clone())?;
     repository.save_to_project(project_ctx)?;
     
+    // Trigger automatic impact analysis
+    if let Ok(mut service) = std::panic::catch_unwind(|| get_impact_service()) {
+        let _ = service.on_entity_changed(
+            &member,
+            ModuleType::Team,
+            "TeamMember".to_string(),
+            ChangeType::Created,
+            &project_ctx,
+        ).await;
+    }
+    
     println!("{} Team member {} {} added successfully!", 
              "✓".green(), member.first_name, member.last_name);
     
@@ -313,6 +326,17 @@ async fn add_role(project_ctx: &ProjectContext) -> Result<()> {
     let mut repository = TeamRepository::load_from_project(project_ctx)?;
     repository.add_role(role.clone())?;
     repository.save_to_project(project_ctx)?;
+    
+    // Trigger automatic impact analysis
+    if let Ok(mut service) = std::panic::catch_unwind(|| get_impact_service()) {
+        let _ = service.on_entity_changed(
+            &role,
+            ModuleType::Team,
+            "Role".to_string(),
+            ChangeType::Created,
+            &project_ctx,
+        ).await;
+    }
     
     println!("{} Role '{}' added successfully!", "✓".green(), role.name);
     
@@ -433,6 +457,17 @@ async fn add_team(project_ctx: &ProjectContext) -> Result<()> {
     let mut repository = TeamRepository::load_from_project(project_ctx)?;
     repository.add_team(team.clone())?;
     repository.save_to_project(project_ctx)?;
+    
+    // Trigger automatic impact analysis
+    if let Ok(mut service) = std::panic::catch_unwind(|| get_impact_service()) {
+        let _ = service.on_entity_changed(
+            &team,
+            ModuleType::Team,
+            "Team".to_string(),
+            ChangeType::Created,
+            &project_ctx,
+        ).await;
+    }
     
     println!("{} Team '{}' added successfully!", "✓".green(), team.name);
     if !team.members.is_empty() {

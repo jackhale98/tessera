@@ -9,6 +9,7 @@ members = [
     "crates/quality",
     "crates/tol",
     "crates/tessera-team",
+    "crates/tessera-impact",
 ]
 resolver = "2"
 default-members = ["cli"]

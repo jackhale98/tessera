@@ -34,6 +34,7 @@ impl ToleranceAnalyzer {
         };
         
         Ok(StackupAnalysis {
+            id: tessera_core::Id::new(),
             stackup_id: stackup.id,
             stackup_name: stackup.name.clone(),
             target_dimension: stackup.target_dimension,
@@ -76,6 +77,7 @@ impl ToleranceAnalyzer {
         }
         
         Ok(StackupAnalysis {
+            id: tessera_core::Id::new(),
             stackup_id: stackup.id,
             stackup_name: stackup.name.clone(),
             target_dimension: stackup.target_dimension,

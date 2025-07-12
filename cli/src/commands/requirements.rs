@@ -1,9 +1,10 @@
-use crate::{RequirementsCommands, utils::truncate_string};
+use crate::{RequirementsCommands, utils::truncate_string, impact_service::get_impact_service};
 use colored::Colorize;
 use comfy_table::Table;
 use tessera_core::{ProjectContext, Result};
 use inquire::{Select, Text, Confirm};
 use tessera_requirements::*;
+use tessera_impact::{ModuleType, ChangeType};
 use chrono::{DateTime, Utc};
 
 pub async fn execute_requirements_command(command: RequirementsCommands, project_ctx: ProjectContext) -> Result<()> {
@@ -86,6 +87,17 @@ async fn add_requirement_interactive(project_ctx: ProjectContext) -> Result<()> 
     let mut repo = RequirementsRepository::load_from_directory(&requirements_dir)?;
     repo.add_requirement(requirement.clone())?;
     repo.save_to_directory(&requirements_dir)?;
+    
+    // Trigger automatic impact analysis
+    if let Ok(service) = std::panic::catch_unwind(|| get_impact_service()) {
+        let _ = service.on_entity_changed(
+            &requirement,
+            ModuleType::Requirements,
+            "Requirement".to_string(),
+            ChangeType::Created,
+            &project_ctx,
+        ).await;
+    }
     
     println!("{} Requirement '{}' added successfully!", "✓".green(), requirement.name);
     println!("ID: {}", requirement.id);
@@ -354,6 +366,18 @@ async fn edit_requirement_interactive(project_ctx: ProjectContext) -> Result<()>
             "💾 Save changes" => {
                 repo.update_requirement(requirement.clone())?;
                 repo.save_to_directory(&requirements_dir)?;
+                
+                // Trigger automatic impact analysis
+                if let Ok(service) = std::panic::catch_unwind(|| get_impact_service()) {
+                    let _ = service.on_entity_changed(
+                        &requirement,
+                        ModuleType::Requirements,
+                        "Requirement".to_string(),
+                        ChangeType::Updated,
+                        &project_ctx,
+                    ).await;
+                }
+                
                 println!("{} Requirement '{}' updated successfully!", "✓".green(), requirement.name);
                 break;
             },
@@ -434,6 +458,17 @@ async fn add_input_interactive(project_ctx: ProjectContext) -> Result<()> {
     let mut repo = RequirementsRepository::load_from_directory(&requirements_dir)?;
     repo.add_design_input(input.clone())?;
     repo.save_to_directory(&requirements_dir)?;
+    
+    // Trigger automatic impact analysis
+    if let Ok(service) = std::panic::catch_unwind(|| get_impact_service()) {
+        let _ = service.on_entity_changed(
+            &input,
+            ModuleType::Requirements,
+            "DesignInput".to_string(),
+            ChangeType::Created,
+            &project_ctx,
+        ).await;
+    }
     
     println!("{} Design input '{}' added successfully!", "✓".green(), input.name);
     println!("ID: {}", input.id);
@@ -580,6 +615,18 @@ async fn edit_input_interactive(project_ctx: ProjectContext) -> Result<()> {
             "💾 Save changes" => {
                 repo.update_design_input(input.clone())?;
                 repo.save_to_directory(&requirements_dir)?;
+                
+                // Trigger automatic impact analysis
+                if let Ok(service) = std::panic::catch_unwind(|| get_impact_service()) {
+                    let _ = service.on_entity_changed(
+                        &input,
+                        ModuleType::Requirements,
+                        "DesignInput".to_string(),
+                        ChangeType::Updated,
+                        &project_ctx,
+                    ).await;
+                }
+                
                 println!("{} Design input '{}' updated successfully!", "✓".green(), input.name);
                 break;
             },
@@ -675,6 +722,17 @@ async fn add_output_interactive(project_ctx: ProjectContext) -> Result<()> {
     let mut repo = RequirementsRepository::load_from_directory(&requirements_dir)?;
     repo.add_design_output(output.clone())?;
     repo.save_to_directory(&requirements_dir)?;
+    
+    // Trigger automatic impact analysis
+    if let Ok(service) = std::panic::catch_unwind(|| get_impact_service()) {
+        let _ = service.on_entity_changed(
+            &output,
+            ModuleType::Requirements,
+            "DesignOutput".to_string(),
+            ChangeType::Created,
+            &project_ctx,
+        ).await;
+    }
     
     println!("{} Design output '{}' added successfully!", "✓".green(), output.name);
     println!("ID: {}", output.id);
@@ -901,6 +959,18 @@ async fn edit_output_interactive(project_ctx: ProjectContext) -> Result<()> {
             "💾 Save changes" => {
                 repo.update_design_output(output.clone())?;
                 repo.save_to_directory(&requirements_dir)?;
+                
+                // Trigger automatic impact analysis
+                if let Ok(service) = std::panic::catch_unwind(|| get_impact_service()) {
+                    let _ = service.on_entity_changed(
+                        &output,
+                        ModuleType::Requirements,
+                        "DesignOutput".to_string(),
+                        ChangeType::Updated,
+                        &project_ctx,
+                    ).await;
+                }
+                
                 println!("{} Design output '{}' updated successfully!", "✓".green(), output.name);
                 break;
             },
@@ -1002,6 +1072,17 @@ async fn add_verification_interactive(project_ctx: ProjectContext) -> Result<()>
     let mut repo = RequirementsRepository::load_from_directory(&requirements_dir)?;
     repo.add_verification(verification.clone())?;
     repo.save_to_directory(&requirements_dir)?;
+    
+    // Trigger automatic impact analysis
+    if let Ok(service) = std::panic::catch_unwind(|| get_impact_service()) {
+        let _ = service.on_entity_changed(
+            &verification,
+            ModuleType::Requirements,
+            "Verification".to_string(),
+            ChangeType::Created,
+            &project_ctx,
+        ).await;
+    }
     
     println!("{} Verification '{}' added successfully!", "✓".green(), verification.name);
     println!("ID: {}", verification.id);
@@ -1222,6 +1303,18 @@ async fn edit_verification_interactive(project_ctx: ProjectContext) -> Result<()
             "💾 Save changes" => {
                 repo.update_verification(verification.clone())?;
                 repo.save_to_directory(&requirements_dir)?;
+                
+                // Trigger automatic impact analysis
+                if let Ok(service) = std::panic::catch_unwind(|| get_impact_service()) {
+                    let _ = service.on_entity_changed(
+                        &verification,
+                        ModuleType::Requirements,
+                        "Verification".to_string(),
+                        ChangeType::Updated,
+                        &project_ctx,
+                    ).await;
+                }
+                
                 println!("{} Verification '{}' updated successfully!", "✓".green(), verification.name);
                 break;
             },

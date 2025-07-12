@@ -3,7 +3,7 @@
         id: ("e22af8b0-2fcb-4b1f-8fab-b39bb058f9a6"),
         name: "testreq",
         description: "this is a test",
-        category: Performance,
+        category: Regulatory,
         priority: High,
         status: Draft,
         rationale: None,
@@ -12,7 +12,7 @@
         tags: [],
         metadata: {},
         created: "2025-07-11T14:57:27.737515354Z",
-        updated: "2025-07-11T14:57:27.737515354Z",
+        updated: "2025-07-12T14:30:55.986368738Z",
     ),
     ("bd5ccc09-739c-4f46-93b0-22bce9903c9e"): (
         id: ("bd5ccc09-739c-4f46-93b0-22bce9903c9e"),
