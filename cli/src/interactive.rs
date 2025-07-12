@@ -498,6 +498,7 @@ async fn run_tol_manage_menu(project_ctx: ProjectContext) -> Result<()> {
                 run_tol_entity_actions_menu("Features", &[
                     ("Add Feature", TolCommands::AddFeature),
                     ("Edit Feature", TolCommands::EditFeature),
+                    ("List Features", TolCommands::ListFeatures),
                 ], project_ctx.clone()).await
             },
             "🔗 Mates" => {
@@ -511,6 +512,7 @@ async fn run_tol_manage_menu(project_ctx: ProjectContext) -> Result<()> {
                 run_tol_entity_actions_menu("Stackups", &[
                     ("Add Stackup", TolCommands::AddStackup),
                     ("Edit Stackup", TolCommands::EditStackup),
+                    ("Delete Stackup", TolCommands::DeleteStackup),
                 ], project_ctx.clone()).await
             },
             "← Back" => {
@@ -553,24 +555,28 @@ async fn run_tol_entity_actions_menu(entity_type: &str, actions: &[(&str, TolCom
 
 async fn run_tol_analysis_menu(project_ctx: ProjectContext) -> Result<()> {
     loop {
-        println!("\n{}", "Tolerance Analysis - Run Analysis".bold().blue());
+        println!("\n{}", "Tolerance Analysis - Analysis Tools".bold().blue());
         
         let options = vec![
-            "🏃 Run Analysis",
-            "⚙️  Configure Analysis Settings",
+            "🚀 Run New Analysis",
+            "📋 List Previous Results",
+            "🗑️ Delete Analysis Results",
             "← Back",
         ];
         
-        let selection = Select::new("Select analysis action:", options)
-            .with_help_message("Choose analysis to run or configure")
+        let selection = Select::new("Select action:", options)
+            .with_help_message("Choose analysis action")
             .prompt()?;
         
         let result = match selection {
-            "🏃 Run Analysis" => {
+            "🚀 Run New Analysis" => {
                 execute_tol_command(TolCommands::RunAnalysis, project_ctx.clone()).await
             },
-            "⚙️  Configure Analysis Settings" => {
-                execute_tol_command(TolCommands::ConfigureAnalysis, project_ctx.clone()).await
+            "📋 List Previous Results" => {
+                execute_tol_command(TolCommands::ListAnalysis, project_ctx.clone()).await
+            },
+            "🗑️ Delete Analysis Results" => {
+                execute_tol_command(TolCommands::DeleteAnalysis, project_ctx.clone()).await
             },
             "← Back" => {
                 break;
@@ -585,7 +591,6 @@ async fn run_tol_analysis_menu(project_ctx: ProjectContext) -> Result<()> {
     
     Ok(())
 }
-
 
 // Requirements Management Submenus
 

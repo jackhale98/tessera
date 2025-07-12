@@ -18,3 +18,4 @@ statrs = { workspace = true }
 inquire = { workspace = true }
 colored = { workspace = true }
 comfy-table = { workspace = true }
+plotters = { version = "0.3", default-features = false, features = ["svg_backend", "bitmap_encoder"] }
