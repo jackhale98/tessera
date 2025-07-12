@@ -556,6 +556,10 @@ pub struct Stackup {
     pub feature_contributions: Vec<FeatureContribution>, // Vector contributions for each feature
     pub target_dimension: f64,
     pub tolerance_target: Tolerance,
+    
+    // Engineering specification limits for process capability analysis
+    pub upper_spec_limit: Option<f64>,  // USL - Customer/Engineering upper specification limit
+    pub lower_spec_limit: Option<f64>,  // LSL - Customer/Engineering lower specification limit
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
     pub metadata: IndexMap<String, String>,
@@ -589,7 +593,7 @@ impl Entity for Stackup {
 }
 
 impl Stackup {
-    pub fn new(name: String, description: String, target_dimension: f64) -> Self {
+    pub fn new(name: String, description: String) -> Self {
         let now = Utc::now();
         Self {
             id: Id::new(),
@@ -597,12 +601,14 @@ impl Stackup {
             description,
             dimension_chain: Vec::new(),
             feature_contributions: Vec::new(),
-            target_dimension,
+            target_dimension: 0.0,  // Will be calculated as midpoint of spec limits
             tolerance_target: Tolerance {
                 plus: 0.1,
                 minus: 0.1,
                 distribution: ToleranceDistribution::Normal,
             },
+            upper_spec_limit: None,
+            lower_spec_limit: None,
             created: now,
             updated: now,
             metadata: IndexMap::new(),
@@ -687,6 +693,33 @@ impl Stackup {
         }
         
         self.updated = Utc::now();
+    }
+    
+    /// Set engineering specification limits for process capability analysis
+    pub fn set_specification_limits(&mut self, upper_spec_limit: Option<f64>, lower_spec_limit: Option<f64>) {
+        self.upper_spec_limit = upper_spec_limit;
+        self.lower_spec_limit = lower_spec_limit;
+        
+        // Update target dimension to midpoint of specification limits
+        if let (Some(usl), Some(lsl)) = (upper_spec_limit, lower_spec_limit) {
+            self.target_dimension = (usl + lsl) / 2.0;
+        }
+        
+        self.updated = Utc::now();
+    }
+    
+    /// Get the specification range for process capability calculations
+    /// Returns (USL, LSL) if both limits are defined
+    pub fn get_specification_limits(&self) -> Option<(f64, f64)> {
+        match (self.upper_spec_limit, self.lower_spec_limit) {
+            (Some(usl), Some(lsl)) => Some((usl, lsl)),
+            _ => None,
+        }
+    }
+    
+    /// Check if specification limits are defined for process capability analysis
+    pub fn has_specification_limits(&self) -> bool {
+        self.upper_spec_limit.is_some() && self.lower_spec_limit.is_some()
     }
 }
 

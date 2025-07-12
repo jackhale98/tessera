@@ -178,6 +178,25 @@ impl ToleranceRepository {
         }
     }
     
+    pub fn delete_stackup(&mut self, stackup_id: Id) -> Result<()> {
+        if let Some(pos) = self.stackups.iter().position(|s| s.id == stackup_id) {
+            let removed_stackup = self.stackups.remove(pos);
+            
+            // Also remove any analyses associated with this stackup
+            self.analyses.retain(|a| a.stackup_id != stackup_id);
+            
+            println!("✓ Removed stackup '{}' and {} associated analyses", 
+                     removed_stackup.name, 
+                     self.analyses.iter().filter(|a| a.stackup_id == stackup_id).count());
+            
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                format!("Stackup with id {} not found", stackup_id)
+            ))
+        }
+    }
+    
     // Analysis methods
     pub fn add_analysis(&mut self, analysis: StackupAnalysis) -> Result<()> {
         self.analyses.push(analysis);
@@ -190,6 +209,20 @@ impl ToleranceRepository {
     
     pub fn get_analyses_for_stackup(&self, stackup_id: Id) -> Vec<&StackupAnalysis> {
         self.analyses.iter().filter(|a| a.stackup_id == stackup_id).collect()
+    }
+    
+    pub fn delete_analysis(&mut self, analysis_created: chrono::DateTime<chrono::Utc>) -> Result<()> {
+        if let Some(pos) = self.analyses.iter().position(|a| a.created == analysis_created) {
+            let removed_analysis = self.analyses.remove(pos);
+            println!("✓ Removed analysis '{}' created on {}", 
+                     removed_analysis.stackup_name,
+                     removed_analysis.created.format("%Y-%m-%d %H:%M:%S"));
+            Ok(())
+        } else {
+            Err(tessera_core::DesignTrackError::NotFound(
+                "Analysis not found".to_string()
+            ))
+        }
     }
 }
 

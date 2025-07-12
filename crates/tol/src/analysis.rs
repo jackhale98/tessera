@@ -1,8 +1,8 @@
 use crate::data::*;
 use tessera_core::{Result, Id};
 use rand::Rng;
-use rand_distr::{Distribution, Normal, Uniform, Triangular, LogNormal};
-use statrs::distribution::Beta;
+use rand_distr::{Distribution, Normal as RandNormal, Uniform, Triangular, LogNormal};
+use statrs::distribution::{Beta, Normal as StatNormal, ContinuousCDF};
 use std::fs;
 use std::io::Write;
 
@@ -62,9 +62,9 @@ impl ToleranceAnalyzer {
         }
         
         let mut results = match self.config.method {
-            AnalysisMethod::WorstCase => self.worst_case_analysis_with_contributions(&stackup_features, contributions),
-            AnalysisMethod::RootSumSquare => self.root_sum_square_analysis_with_contributions(&stackup_features, contributions),
-            AnalysisMethod::MonteCarlo => self.monte_carlo_analysis_with_contributions(&stackup_features, contributions)?,
+            AnalysisMethod::WorstCase => self.worst_case_analysis_with_contributions(&stackup_features, contributions, stackup),
+            AnalysisMethod::RootSumSquare => self.root_sum_square_analysis_with_contributions(&stackup_features, contributions, stackup),
+            AnalysisMethod::MonteCarlo => self.monte_carlo_analysis_with_contributions(&stackup_features, contributions, stackup)?,
         };
         
         // For Monte Carlo analysis, save simulation data to CSV and update results
@@ -216,13 +216,13 @@ impl ToleranceAnalyzer {
             user_specified_tolerance.clone()
         };
         
-        // Calculate process capability metrics based on primary tolerance
-        let usl = nominal_dimension + predicted_tolerance.plus;
-        let lsl = nominal_dimension - predicted_tolerance.minus;
-        let cp = (usl - lsl) / (6.0 * std_dev);
-        let cpk = ((usl - nominal_dimension) / (3.0 * std_dev)).min((nominal_dimension - lsl) / (3.0 * std_dev));
-        let sigma_level = cpk * 3.0;
-        let yield_percentage = self.calculate_yield(&samples, lsl, usl);
+        // Calculate process capability metrics using engineering specification limits
+        let (cp, cpk, sigma_level, yield_percentage) = self.calculate_process_capability(
+            nominal_dimension, 
+            std_dev, 
+            &samples, 
+            None // No stackup specification limits provided here
+        );
         
         Ok(AnalysisResults {
             nominal_dimension,
@@ -261,7 +261,7 @@ impl ToleranceAnalyzer {
                 let total_tolerance_band = feature.tolerance.plus + feature.tolerance.minus;
                 let std_dev = total_tolerance_band / 6.0; // Conservative 3-sigma assumption
                 
-                let normal = Normal::new(feature.nominal, std_dev).map_err(|e| {
+                let normal = RandNormal::new(feature.nominal, std_dev).map_err(|e| {
                     tessera_core::DesignTrackError::Module(format!("Failed to create normal distribution: {}", e))
                 })?;
                 normal.sample(rng)
@@ -302,7 +302,7 @@ impl ToleranceAnalyzer {
         Ok(sample)
     }
     
-    fn worst_case_analysis_with_contributions(&self, features: &[&Feature], contributions: &[FeatureContribution]) -> AnalysisResults {
+    fn worst_case_analysis_with_contributions(&self, features: &[&Feature], contributions: &[FeatureContribution], stackup: &Stackup) -> AnalysisResults {
         let mut nominal_dimension = 0.0;
         let mut plus_tolerance = 0.0;
         let mut minus_tolerance = 0.0;
@@ -322,21 +322,34 @@ impl ToleranceAnalyzer {
             distribution: ToleranceDistribution::Uniform,
         };
         
+        // For worst case, we can't calculate meaningful process capability without process data
+        // Set conservative defaults or calculate based on specification limits if available
+        let (cp, cpk, sigma_level, yield_percentage) = if stackup.has_specification_limits() {
+            // We can provide basic capability estimates for worst case
+            let (usl, lsl) = stackup.get_specification_limits().unwrap();
+            let process_range = plus_tolerance + minus_tolerance;
+            let spec_range = usl - lsl;
+            let cp_estimate = spec_range / process_range; // Simplified capability estimate
+            (cp_estimate, cp_estimate * 0.8, 3.0, 99.73) // Conservative estimates
+        } else {
+            (f64::NAN, f64::NAN, f64::NAN, f64::NAN) // Cannot calculate without spec limits
+        };
+
         AnalysisResults {
             nominal_dimension,
             predicted_tolerance,
             three_sigma_tolerance: None,
             user_specified_tolerance: None,
-            cp: 1.0,
-            cpk: 0.8,
-            sigma_level: 3.0,
-            yield_percentage: 99.73,
+            cp,
+            cpk,
+            sigma_level,
+            yield_percentage,
             distribution_data_file: None,
             quartile_data: None,
         }
     }
     
-    fn root_sum_square_analysis_with_contributions(&self, features: &[&Feature], contributions: &[FeatureContribution]) -> AnalysisResults {
+    fn root_sum_square_analysis_with_contributions(&self, features: &[&Feature], contributions: &[FeatureContribution], stackup: &Stackup) -> AnalysisResults {
         let mut nominal_dimension = 0.0;
         let mut variance = 0.0;
         
@@ -363,12 +376,19 @@ impl ToleranceAnalyzer {
             distribution: ToleranceDistribution::Normal,
         };
         
-        // Calculate process capability metrics
-        let usl = nominal_dimension + predicted_tolerance.plus;
-        let lsl = nominal_dimension - predicted_tolerance.minus;
-        let cp = (usl - lsl) / (6.0 * total_std_dev);
-        let cpk = ((usl - nominal_dimension) / (3.0 * total_std_dev)).min((nominal_dimension - lsl) / (3.0 * total_std_dev));
-        let sigma_level = cpk * 3.0;
+        // Calculate process capability metrics using engineering specification limits
+        let (cp, cpk, sigma_level, yield_percentage) = if stackup.has_specification_limits() {
+            let (usl, lsl) = stackup.get_specification_limits().unwrap();
+            let cp = (usl - lsl) / (6.0 * total_std_dev);
+            let cpk = ((usl - nominal_dimension) / (3.0 * total_std_dev)).min((nominal_dimension - lsl) / (3.0 * total_std_dev));
+            let sigma_level = cpk * 3.0;
+            
+            // Calculate yield based on spec limits using normal distribution
+            let yield_pct = self.calculate_yield_from_normal_distribution(nominal_dimension, total_std_dev, lsl, usl);
+            (cp, cpk, sigma_level, yield_pct)
+        } else {
+            (f64::NAN, f64::NAN, f64::NAN, f64::NAN) // Cannot calculate without spec limits
+        };
         
         AnalysisResults {
             nominal_dimension,
@@ -378,13 +398,13 @@ impl ToleranceAnalyzer {
             cp,
             cpk,
             sigma_level,
-            yield_percentage: 99.9937, // 4-sigma for RSS
+            yield_percentage,
             distribution_data_file: None,
             quartile_data: None,
         }
     }
     
-    fn monte_carlo_analysis_with_contributions(&self, features: &[&Feature], contributions: &[FeatureContribution]) -> Result<AnalysisResults> {
+    fn monte_carlo_analysis_with_contributions(&self, features: &[&Feature], contributions: &[FeatureContribution], stackup: &Stackup) -> Result<AnalysisResults> {
         let mut rng = rand::thread_rng();
         let mut samples = Vec::with_capacity(self.config.simulations);
         
@@ -437,12 +457,17 @@ impl ToleranceAnalyzer {
         // Use 3-sigma tolerance as primary for consistency with RSS method
         let predicted_tolerance = three_sigma_tolerance.clone();
         
-        let usl = nominal_dimension + predicted_tolerance.plus;
-        let lsl = nominal_dimension - predicted_tolerance.minus;
-        let cp = (usl - lsl) / (6.0 * std_dev);
-        let cpk = ((usl - nominal_dimension) / (3.0 * std_dev)).min((nominal_dimension - lsl) / (3.0 * std_dev));
-        let sigma_level = cpk * 3.0;
-        let yield_percentage = self.calculate_yield(&samples, lsl, usl);
+        // Calculate process capability metrics using engineering specification limits
+        let spec_limits = stackup.get_specification_limits();
+        let (cp, cpk, sigma_level, yield_percentage) = if let Some((usl, lsl)) = spec_limits {
+            let cp = (usl - lsl) / (6.0 * std_dev);
+            let cpk = ((usl - nominal_dimension) / (3.0 * std_dev)).min((nominal_dimension - lsl) / (3.0 * std_dev));
+            let sigma_level = cpk * 3.0;
+            let yield_percentage = self.calculate_yield(&samples, lsl, usl);
+            (cp, cpk, sigma_level, yield_percentage)
+        } else {
+            (f64::NAN, f64::NAN, f64::NAN, f64::NAN)
+        };
         
         Ok(AnalysisResults {
             nominal_dimension,
@@ -496,6 +521,33 @@ impl ToleranceAnalyzer {
         
         // Save to CSV using existing method
         self.save_simulation_data_to_csv(&samples, stackup_id, &analysis_timestamp)
+    }
+    
+    /// Calculate process capability metrics based on specification limits
+    fn calculate_process_capability(&self, nominal: f64, std_dev: f64, samples: &[f64], stackup_spec_limits: Option<(f64, f64)>) -> (f64, f64, f64, f64) {
+        if let Some((usl, lsl)) = stackup_spec_limits {
+            let cp = (usl - lsl) / (6.0 * std_dev);
+            let cpk = ((usl - nominal) / (3.0 * std_dev)).min((nominal - lsl) / (3.0 * std_dev));
+            let sigma_level = cpk * 3.0;
+            let yield_percentage = self.calculate_yield(samples, lsl, usl);
+            (cp, cpk, sigma_level, yield_percentage)
+        } else {
+            // Cannot calculate meaningful process capability without specification limits
+            (f64::NAN, f64::NAN, f64::NAN, f64::NAN)
+        }
+    }
+    
+    /// Calculate yield percentage for normal distribution based on specification limits
+    fn calculate_yield_from_normal_distribution(&self, mean: f64, std_dev: f64, lsl: f64, usl: f64) -> f64 {
+        // For normal distribution, calculate the probability of being within spec limits
+        if let Ok(normal) = StatNormal::new(mean, std_dev) {
+            let prob_above_lsl = normal.cdf(usl);
+            let prob_below_lsl = normal.cdf(lsl);
+            let prob_in_spec = prob_above_lsl - prob_below_lsl;
+            prob_in_spec * 100.0
+        } else {
+            f64::NAN
+        }
     }
 
     fn save_simulation_data_to_csv(&self, samples: &[f64], stackup_id: &Id, analysis_timestamp: &str) -> Result<String> {

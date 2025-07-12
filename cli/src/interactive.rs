@@ -481,6 +481,7 @@ async fn run_tol_manage_menu(project_ctx: ProjectContext) -> Result<()> {
                 run_tol_entity_actions_menu("Stackups", &[
                     ("Add Stackup", TolCommands::AddStackup),
                     ("Edit Stackup", TolCommands::EditStackup),
+                    ("Delete Stackup", TolCommands::DeleteStackup),
                 ], project_ctx.clone()).await
             },
             "← Back" => {
@@ -527,7 +528,8 @@ async fn run_tol_analysis_menu(project_ctx: ProjectContext) -> Result<()> {
         
         let options = vec![
             "🚀 Run New Analysis",
-            "📋 View Previous Results", 
+            "📋 View Previous Results",
+            "🗑️ Delete Analysis Results",
             "← Back",
         ];
         
@@ -541,6 +543,9 @@ async fn run_tol_analysis_menu(project_ctx: ProjectContext) -> Result<()> {
             },
             "📋 View Previous Results" => {
                 execute_tol_command(TolCommands::ViewAnalysis, project_ctx.clone()).await
+            },
+            "🗑️ Delete Analysis Results" => {
+                execute_tol_command(TolCommands::DeleteAnalysis, project_ctx.clone()).await
             },
             "← Back" => {
                 break;

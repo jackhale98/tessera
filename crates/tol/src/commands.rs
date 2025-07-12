@@ -185,12 +185,37 @@ impl ToleranceCommands {
         let description = Text::new("Description:")
             .prompt()?;
         
-        let target_str = Text::new("Target dimension:")
-            .with_default("0.0")
-            .prompt()?;
-        let target_dimension: f64 = target_str.parse().unwrap_or(0.0);
+        let mut stackup = Stackup::new(name, description);
         
-        let mut stackup = Stackup::new(name, description, target_dimension);
+        // Set engineering specification limits for process capability analysis
+        let set_spec_limits = Confirm::new("Set engineering specification limits for process capability analysis?")
+            .with_default(true)
+            .with_help_message("Required for meaningful Cp/Cpk calculations")
+            .prompt()?;
+        
+        if set_spec_limits {
+            let usl_str = Text::new("Upper Specification Limit (USL):")
+                .with_help_message("Engineering/customer maximum acceptable dimension")
+                .prompt()?;
+            let lsl_str = Text::new("Lower Specification Limit (LSL):")
+                .with_help_message("Engineering/customer minimum acceptable dimension")
+                .prompt()?;
+            
+            if let (Ok(usl), Ok(lsl)) = (usl_str.parse::<f64>(), lsl_str.parse::<f64>()) {
+                if usl > lsl {
+                    stackup.set_specification_limits(Some(usl), Some(lsl));
+                    println!("✓ Specification limits set: LSL={:.6}, USL={:.6}", lsl, usl);
+                    println!("✓ Target dimension calculated as midpoint: {:.6}", stackup.target_dimension);
+                    println!("ℹ️  Note: Target tolerance not needed when using USL/LSL specification limits");
+                } else {
+                    println!("⚠ Warning: USL must be greater than LSL. Specification limits not set.");
+                }
+            } else {
+                println!("⚠ Warning: Invalid specification limits. Process capability analysis will not be available.");
+            }
+        } else {
+            println!("⚠ Warning: Without specification limits, process capability analysis will not be meaningful.");
+        }
         
         // Add features to the dimension chain
         let add_features = {
@@ -319,6 +344,24 @@ impl ToleranceCommands {
                 .with_default("0.95")
                 .prompt()?;
             confidence_level = conf_str.parse().unwrap_or(0.95);
+            
+            let use_seed = Confirm::new("Set random seed for reproducible results?")
+                .with_default(false)
+                .with_help_message("Use random seed for debugging/validation")
+                .prompt()?;
+            
+            if use_seed {
+                let seed_str = Text::new("Random seed (integer):")
+                    .with_default("12345")
+                    .with_help_message("Same seed produces identical results")
+                    .prompt()?;
+                if let Ok(seed_value) = seed_str.parse::<u64>() {
+                    println!("✓ Random seed set: {}", seed_value);
+                    // Note: Seed is handled by individual analyzers in their configuration
+                }
+            } else {
+                println!("✓ Using random seed for simulation");
+            }
         }
         
         // Use stackup's existing feature contributions
@@ -385,8 +428,14 @@ impl ToleranceCommands {
         println!("Nominal Dimension: {:.6}", analysis.results.nominal_dimension);
         println!("Dimension Variance: {:.6}", analysis.results.nominal_dimension - analysis.target_dimension);
         
-        // Show primary predicted tolerance
-        println!("Primary Tolerance: +{:.6} / -{:.6}", 
+        // Show predicted tolerance based on analysis method
+        let tolerance_label = match analysis.config.method {
+            AnalysisMethod::WorstCase => "Worst-Case Tolerance",
+            AnalysisMethod::RootSumSquare => "RSS Predicted Tolerance (3σ)",
+            AnalysisMethod::MonteCarlo => "Monte Carlo Predicted Tolerance (3σ)",
+        };
+        println!("{}: +{:.6} / -{:.6}", 
+                 tolerance_label,
                  analysis.results.predicted_tolerance.plus, 
                  analysis.results.predicted_tolerance.minus);
         
@@ -425,12 +474,69 @@ impl ToleranceCommands {
             }
         }
         
-        println!("\n{}", "Process Capability");
-        println!("{}", "-".repeat(30));
-        println!("Cp (Process Capability): {:.3}", analysis.results.cp);
-        println!("Cpk (Process Capability Index): {:.3}", analysis.results.cpk);
-        println!("Sigma Level: {:.2}", analysis.results.sigma_level);
-        println!("Yield Percentage: {:.2}%", analysis.results.yield_percentage);
+        println!("\n{}", "Process Capability Analysis");
+        println!("{}", "-".repeat(50));
+        
+        // Get stackup to check for specification limits
+        let stackups = self.repository.get_stackups();
+        let stackup = stackups.iter().find(|s| s.id == analysis.stackup_id);
+        
+        if let Some(stackup) = stackup {
+            if stackup.has_specification_limits() {
+                let (usl, lsl) = stackup.get_specification_limits().unwrap();
+                println!("Engineering Specification Limits:");
+                println!("  Lower Spec Limit (LSL): {:.6}", lsl);
+                println!("  Upper Spec Limit (USL): {:.6}", usl);
+                println!("  Specification Range: {:.6}", usl - lsl);
+                
+                if !analysis.results.cp.is_nan() {
+                    println!("\nProcess Capability Metrics:");
+                    println!("  Cp (Process Capability): {:.3}", analysis.results.cp);
+                    println!("  Cpk (Process Capability Index): {:.3}", analysis.results.cpk);
+                    println!("  Sigma Level: {:.2}σ", analysis.results.sigma_level);
+                    println!("  Yield Percentage: {:.2}%", analysis.results.yield_percentage);
+                    
+                    // Calculate and display PPM (parts per million defects)
+                    let defect_rate = (100.0 - analysis.results.yield_percentage) / 100.0;
+                    let ppm = defect_rate * 1_000_000.0;
+                    println!("  Defect Rate: {:.0} PPM (parts per million)", ppm);
+                    
+                    // Add interpretation
+                    let cp_interpretation = if analysis.results.cp >= 1.67 {
+                        "Excellent (Aerospace/Medical grade)"
+                    } else if analysis.results.cp >= 1.33 {
+                        "Good (Automotive standard)"
+                    } else if analysis.results.cp >= 1.0 {
+                        "Marginal"
+                    } else {
+                        "Poor - Process improvement needed"
+                    };
+                    
+                    let cpk_interpretation = if analysis.results.cpk >= 1.33 {
+                        "Process is capable and centered"
+                    } else if analysis.results.cpk >= 1.0 {
+                        "Process marginally capable, check centering"
+                    } else {
+                        "Process not capable or severely off-center"
+                    };
+                    
+                    println!("\nInterpretation:");
+                    println!("  Cp Assessment: {}", cp_interpretation);
+                    println!("  Cpk Assessment: {}", cpk_interpretation);
+                } else {
+                    println!("\n⚠ Process capability could not be calculated");
+                    println!("  This may be due to insufficient data or analysis method limitations");
+                }
+            } else {
+                println!("⚠ No engineering specification limits defined");
+                println!("Process capability analysis requires LSL and USL to be meaningful.");
+                println!("Current values shown are based on analysis predictions only:");
+                println!("  Cp: {:.3} (Not meaningful)", analysis.results.cp);
+                println!("  Cpk: {:.3} (Not meaningful)", analysis.results.cpk);
+                println!("  Yield: {:.2}% (Based on predicted tolerance)", analysis.results.yield_percentage);
+                println!("\n💡 Tip: Set specification limits during stackup creation for proper Cp/Cpk analysis");
+            }
+        }
         
         if !analysis.feature_contributions.is_empty() {
             println!("\n{}", "Feature Contributions");
@@ -443,16 +549,29 @@ impl ToleranceCommands {
             
             // Add sensitivity analysis
             if let Ok(sensitivity) = self.calculate_sensitivity_analysis(analysis) {
-                println!("\n{}", "Sensitivity Analysis");
+                println!("\n{}", "Sensitivity Analysis (Stackup Impact)");
                 println!("{}", "-".repeat(70));
                 println!("Total Variance: {:.6}", sensitivity.total_variance);
                 println!("Total Standard Deviation: {:.6}", sensitivity.total_std_dev);
                 
-                println!("\nFeature Impact Ranking:");
+                println!("\nFeature Impact Ranking (Including Geometric Multipliers):");
                 for contrib in &sensitivity.contributions {
                     println!("{}. {} - {:.2}% contribution (variance: {:.6})",
                              contrib.rank, contrib.feature_name, contrib.percentage, 
                              contrib.variance_contribution);
+                }
+                
+                // Add tolerance-normalized sensitivity
+                if let Ok(tolerance_sensitivity) = self.calculate_tolerance_normalized_sensitivity(analysis) {
+                    println!("\n{}", "Tolerance-Normalized Sensitivity (Pure Tolerance Impact)");
+                    println!("{}", "-".repeat(70));
+                    println!("Note: This shows sensitivity based purely on tolerance magnitude,");
+                    println!("ignoring geometric multipliers from stackup configuration.");
+                    
+                    for (i, contrib) in tolerance_sensitivity.iter().enumerate() {
+                        println!("{}. {} - {:.2}% (tolerance: ±{:.6})",
+                                 i + 1, contrib.0, contrib.1, contrib.2);
+                    }
                 }
             }
         }
@@ -551,6 +670,48 @@ impl ToleranceCommands {
         
         let sensitivity_analyzer = SensitivityAnalyzer::new(None);
         sensitivity_analyzer.analyze_stackup(stackup, &features, &stackup_contributions)
+    }
+    
+    /// Calculate tolerance-normalized sensitivity (ignoring geometric multipliers)
+    fn calculate_tolerance_normalized_sensitivity(&self, analysis: &StackupAnalysis) -> Result<Vec<(String, f64, f64)>> {
+        let features = self.repository.get_features();
+        
+        let mut tolerance_contributions = Vec::new();
+        let mut total_tolerance_variance = 0.0;
+        
+        // Calculate variance based purely on tolerance magnitude (ignoring direction multipliers)
+        for fc in &analysis.feature_contributions {
+            if let Some(feature) = features.iter().find(|f| f.id == fc.feature_id) {
+                // Calculate tolerance variance ignoring geometric multipliers
+                let total_tolerance = feature.tolerance.plus + feature.tolerance.minus;
+                let tolerance_variance = match feature.tolerance.distribution {
+                    ToleranceDistribution::Normal => (total_tolerance / 6.0).powi(2),
+                    ToleranceDistribution::Uniform => (total_tolerance).powi(2) / 12.0,
+                    ToleranceDistribution::Triangular => (total_tolerance).powi(2) / 24.0,
+                    _ => (total_tolerance / 6.0).powi(2), // Default to normal
+                };
+                
+                tolerance_contributions.push((feature.name.clone(), tolerance_variance, total_tolerance));
+                total_tolerance_variance += tolerance_variance;
+            }
+        }
+        
+        // Calculate percentages and sort by contribution
+        let mut result: Vec<(String, f64, f64)> = tolerance_contributions.into_iter()
+            .map(|(name, variance, tolerance)| {
+                let percentage = if total_tolerance_variance > 0.0 {
+                    (variance / total_tolerance_variance) * 100.0
+                } else {
+                    0.0
+                };
+                (name, percentage, tolerance)
+            })
+            .collect();
+        
+        // Sort by percentage (descending)
+        result.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        
+        Ok(result)
     }
     
     pub fn run_analysis(&mut self, stackup_id: Option<Id>) -> Result<()> {
@@ -1288,8 +1449,9 @@ impl ToleranceCommands {
         let edit_options = vec![
             "Name",
             "Description",
-            "Target Dimension",
-            "Tolerance Target",
+            "Upper/Lower Specification Limits (USL/LSL)",
+            "Target Dimension (auto-calculated from USL/LSL)",
+            "Legacy Tolerance Target (rarely needed)",
             "Manage Features",
             "Done",
         ];
@@ -1316,7 +1478,57 @@ impl ToleranceCommands {
                         stackup.updated = chrono::Utc::now();
                     }
                 },
-                "Target Dimension" => {
+                "Upper/Lower Specification Limits (USL/LSL)" => {
+                    println!("\nConfiguring engineering specification limits for process capability analysis:");
+                    
+                    let current_usl = stackup.upper_spec_limit.map(|v| v.to_string()).unwrap_or("None".to_string());
+                    let current_lsl = stackup.lower_spec_limit.map(|v| v.to_string()).unwrap_or("None".to_string());
+                    
+                    println!("Current USL: {}", current_usl);
+                    println!("Current LSL: {}", current_lsl);
+                    
+                    let use_spec_limits = Confirm::new("Set specification limits for process capability analysis?")
+                        .with_default(stackup.has_specification_limits())
+                        .with_help_message("Required for Cp/Cpk calculations")
+                        .prompt()?;
+                    
+                    if use_spec_limits {
+                        let usl_str = Text::new("Upper Specification Limit (USL):")
+                            .with_default(&current_usl)
+                            .with_help_message("Engineering upper limit for process capability")
+                            .prompt()?;
+                        
+                        let lsl_str = Text::new("Lower Specification Limit (LSL):")
+                            .with_default(&current_lsl)
+                            .with_help_message("Engineering lower limit for process capability")
+                            .prompt()?;
+                        
+                        let usl = if usl_str != "None" { 
+                            usl_str.parse::<f64>().ok() 
+                        } else { 
+                            None 
+                        };
+                        
+                        let lsl = if lsl_str != "None" { 
+                            lsl_str.parse::<f64>().ok() 
+                        } else { 
+                            None 
+                        };
+                        
+                        stackup.set_specification_limits(usl, lsl);
+                        
+                        if let (Some(usl_val), Some(lsl_val)) = (usl, lsl) {
+                            println!("✓ Specification limits set: USL = {:.6}, LSL = {:.6}", usl_val, lsl_val);
+                            println!("✓ Target dimension auto-calculated: {:.6}", stackup.target_dimension);
+                        } else {
+                            println!("⚠️  Incomplete specification limits - process capability analysis will not be available");
+                        }
+                    } else {
+                        stackup.set_specification_limits(None, None);
+                        println!("✓ Specification limits cleared");
+                    }
+                },
+                "Target Dimension (auto-calculated from USL/LSL)" => {
                     let target_str = Text::new("New target dimension:")
                         .with_default(&stackup.target_dimension.to_string())
                         .prompt()?;
@@ -1325,7 +1537,7 @@ impl ToleranceCommands {
                         stackup.updated = chrono::Utc::now();
                     }
                 },
-                "Tolerance Target" => {
+                "Legacy Tolerance Target (rarely needed)" => {
                     let plus_str = Text::new("Plus tolerance:")
                         .with_default(&stackup.tolerance_target.plus.to_string())
                         .prompt()?;
@@ -1356,6 +1568,52 @@ impl ToleranceCommands {
         self.repository.save_to_directory(&tol_dir)?;
         
         println!("✓ Stackup '{}' updated successfully!", stackup.name);
+        
+        Ok(())
+    }
+    
+    pub async fn delete_stackup_interactive(&mut self) -> Result<()> {
+        let stackups = self.repository.get_stackups();
+        if stackups.is_empty() {
+            println!("No stackups found.");
+            return Ok(());
+        }
+        
+        let stackup_options: Vec<String> = stackups.iter()
+            .map(|s| format!("{} - {} ({} features)", s.name, s.description, s.dimension_chain.len()))
+            .collect();
+        
+        let stackup_selection = Select::new("Select stackup to delete:", stackup_options.clone()).prompt()?;
+        let stackup_index = stackup_options.iter().position(|x| x == &stackup_selection).unwrap();
+        let stackup_to_delete = stackups[stackup_index].clone(); // Clone to avoid borrow issues
+        
+        // Show stackup details and confirm deletion
+        println!("\nStackup to delete:");
+        println!("  Name: {}", stackup_to_delete.name);
+        println!("  Description: {}", stackup_to_delete.description);
+        println!("  Features: {}", stackup_to_delete.dimension_chain.len());
+        
+        // Count associated analyses
+        let associated_analyses = self.repository.get_analyses_for_stackup(stackup_to_delete.id);
+        if !associated_analyses.is_empty() {
+            println!("  Associated analyses: {} (will also be deleted)", associated_analyses.len());
+        }
+        
+        let confirm_delete = Confirm::new("⚠️  Are you sure you want to delete this stackup?")
+            .with_default(false)
+            .with_help_message("This action cannot be undone")
+            .prompt()?;
+        
+        if confirm_delete {
+            self.repository.delete_stackup(stackup_to_delete.id)?;
+            
+            let tol_dir = self.project_context.module_path("tol");
+            self.repository.save_to_directory(&tol_dir)?;
+            
+            println!("✓ Stackup '{}' deleted successfully!", stackup_to_delete.name);
+        } else {
+            println!("Delete operation cancelled.");
+        }
         
         Ok(())
     }
@@ -1748,6 +2006,54 @@ impl ToleranceCommands {
         
         // Display the selected analysis results
         self.display_analysis_results(selected_analysis);
+        
+        Ok(())
+    }
+    
+    pub async fn delete_analysis_interactive(&mut self) -> Result<()> {
+        let analyses = self.repository.get_analyses();
+        if analyses.is_empty() {
+            println!("No analysis results found.");
+            return Ok(());
+        }
+        
+        // Create display options for each analysis
+        let analysis_options: Vec<String> = analyses.iter()
+            .map(|a| format!("{} - {} ({:?}) [{}]", 
+                a.stackup_name, 
+                a.created.format("%Y-%m-%d %H:%M:%S"),
+                a.config.method,
+                if a.results.cp >= 1.33 { "Good" } else if a.results.cp >= 1.0 { "Fair" } else { "Poor" }
+            ))
+            .collect();
+        
+        // Allow user to select an analysis to delete
+        let analysis_selection = Select::new("Select analysis to delete:", analysis_options.clone()).prompt()?;
+        let analysis_index = analysis_options.iter().position(|x| x == &analysis_selection).unwrap();
+        let selected_analysis = &analyses[analysis_index];
+        
+        // Show analysis details and confirm deletion
+        println!("\nAnalysis to delete:");
+        println!("  Stackup: {}", selected_analysis.stackup_name);
+        println!("  Method: {:?}", selected_analysis.config.method);
+        println!("  Created: {}", selected_analysis.created.format("%Y-%m-%d %H:%M:%S"));
+        println!("  Cp: {:.3}", selected_analysis.results.cp);
+        
+        let confirm_delete = Confirm::new("⚠️  Are you sure you want to delete this analysis?")
+            .with_default(false)
+            .with_help_message("This action cannot be undone")
+            .prompt()?;
+        
+        if confirm_delete {
+            self.repository.delete_analysis(selected_analysis.created)?;
+            
+            let tol_dir = self.project_context.module_path("tol");
+            self.repository.save_to_directory(&tol_dir)?;
+            
+            println!("✓ Analysis deleted successfully!");
+        } else {
+            println!("Delete operation cancelled.");
+        }
         
         Ok(())
     }

@@ -81,12 +81,14 @@
         ],
         target_dimension: 0.1,
         tolerance_target: (
-            plus: 0.1,
-            minus: 0.1,
+            plus: 0.12,
+            minus: 0.08,
             distribution: Normal,
         ),
+        upper_spec_limit: Some(0.12),
+        lower_spec_limit: Some(0.08),
         created: "2025-07-12T01:59:39.364879069Z",
-        updated: "2025-07-12T02:00:03.886654955Z",
+        updated: "2025-07-12T02:37:47.826850876Z",
         metadata: {},
         dimension_chain_info: [
             (
