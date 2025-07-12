@@ -1,0 +1,34 @@
+{
+    ("00e1356d-9512-4a94-8d6a-3c63048400af"): (
+        id: ("00e1356d-9512-4a94-8d6a-3c63048400af"),
+        name: "Engineer",
+        description: "Role description",
+        git_approval_authority: (
+            can_approve_paths: [
+                "tol",
+                "pm",
+            ],
+            approval_contexts: [],
+            max_cost_approval: None,
+            max_schedule_impact_days: None,
+        ),
+        metadata: {},
+        created: "2025-07-12T13:14:17.903592894Z",
+    ),
+    ("4092e2cc-a2b2-4598-8d9b-88a0c1e97fd3"): (
+        id: ("4092e2cc-a2b2-4598-8d9b-88a0c1e97fd3"),
+        name: "Quality",
+        description: "Role description",
+        git_approval_authority: (
+            can_approve_paths: [
+                "requirements",
+                "risk",
+            ],
+            approval_contexts: [],
+            max_cost_approval: None,
+            max_schedule_impact_days: None,
+        ),
+        metadata: {},
+        created: "2025-07-12T13:14:44.493571585Z",
+    ),
+}

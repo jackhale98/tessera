@@ -9,7 +9,7 @@ mod utils;
 
 use commands::{
     execute_requirements_command, execute_risk_command, execute_verification_command,
-    execute_quality_command, execute_pm_command, execute_tol_command, execute_link_command
+    execute_quality_command, execute_pm_command, execute_tol_command, execute_team_command, execute_link_command
 };
 use interactive::*;
 
@@ -73,6 +73,12 @@ enum Commands {
     Tol {
         #[command(subcommand)]
         command: TolCommands,
+    },
+    
+    /// Team management commands
+    Team {
+        #[command(subcommand)]
+        command: TeamCommands,
     },
     
     /// Interactive mode
@@ -436,6 +442,84 @@ enum TolCommands {
     Dashboard,
 }
 
+#[derive(Subcommand, Clone)]
+enum TeamCommands {
+    /// Add a new team member
+    #[command(name = "member:add")]
+    AddMember,
+    
+    /// List team members
+    #[command(name = "member:list")]
+    ListMembers,
+    
+    /// Edit a team member
+    #[command(name = "member:edit")]
+    EditMember,
+    
+    /// Deactivate a team member
+    #[command(name = "member:deactivate")]
+    DeactivateMember,
+    
+    /// Add a new role
+    #[command(name = "role:add")]
+    AddRole,
+    
+    /// List roles
+    #[command(name = "role:list")]
+    ListRoles,
+    
+    /// Edit a role
+    #[command(name = "role:edit")]
+    EditRole,
+    
+    /// Assign role to member
+    #[command(name = "role:assign")]
+    AssignRole,
+    
+    /// Remove role from member
+    #[command(name = "role:remove")]
+    RemoveRole,
+    
+    /// Add a new team
+    #[command(name = "team:add")]
+    AddTeam,
+    
+    /// List teams
+    #[command(name = "team:list")]
+    ListTeams,
+    
+    /// Edit a team
+    #[command(name = "team:edit")]
+    EditTeam,
+    
+    /// Add member to team
+    #[command(name = "team:add-member")]
+    AddMemberToTeam,
+    
+    /// Remove member from team
+    #[command(name = "team:remove-member")]
+    RemoveMemberFromTeam,
+    
+    /// Set team lead
+    #[command(name = "team:set-lead")]
+    SetTeamLead,
+    
+    /// Validate team configuration
+    #[command(name = "validate")]
+    Validate,
+    
+    /// Sync with git teams
+    #[command(name = "git:sync")]
+    GitSync,
+    
+    /// Generate CODEOWNERS file
+    #[command(name = "git:codeowners")]
+    GenerateCodeowners,
+    
+    /// Show team dashboard
+    Dashboard,
+}
+
 #[derive(Subcommand)]
 enum LinkCommands {
     /// Add a cross-module link
@@ -493,6 +577,11 @@ async fn main() -> Result<()> {
         Some(Commands::Tol { command }) => {
             let project_ctx = load_project_context(cli.project)?;
             execute_tol_command(command, project_ctx).await?;
+        },
+        
+        Some(Commands::Team { command }) => {
+            let project_ctx = load_project_context(cli.project)?;
+            execute_team_command(command, project_ctx).await?;
         },
         
         Some(Commands::Interactive { module }) => {

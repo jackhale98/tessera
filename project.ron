@@ -1,9 +1,9 @@
 (
-    id: "project-aa657096-ba1f-4ca4-891d-57dd8c6679f6",
-    name: "Test Project",
+    id: "project-c2546c5e-a1d4-4765-b88a-522526c7e726",
+    name: "Team Test Project",
     version: "0.1.0",
-    description: "Engineering project: Test Project",
-    created: "2025-07-11T02:24:32.048477075Z",
+    description: "Testing team management functionality",
+    created: "2025-07-12T13:22:43.449068052Z",
     modules: [
         "pm",
         "quality",

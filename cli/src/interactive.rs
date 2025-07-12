@@ -1,8 +1,8 @@
 use crate::commands::{
     execute_requirements_command, execute_risk_command, execute_verification_command,
-    execute_quality_command, execute_pm_command, execute_tol_command
+    execute_pm_command, execute_tol_command, execute_team_command
 };
-use crate::{RequirementsCommands, RiskCommands, VerificationCommands, QualityCommands, PmCommands, TolCommands};
+use crate::{RequirementsCommands, RiskCommands, VerificationCommands, PmCommands, TolCommands, TeamCommands};
 use colored::Colorize;
 use tessera_core::{ProjectContext, Result};
 use inquire::Select;
@@ -24,10 +24,6 @@ pub async fn run_interactive_mode(mut project_ctx: ProjectContext, module: Optio
             project_ctx.set_current_module("verification".to_string());
             run_verification_interactive(project_ctx).await?;
         },
-        Some(ref m) if m == "quality" => {
-            project_ctx.set_current_module("quality".to_string());
-            run_quality_interactive(project_ctx).await?;
-        },
         Some(ref m) if m == "pm" => {
             project_ctx.set_current_module("pm".to_string());
             run_pm_interactive(project_ctx).await?;
@@ -35,6 +31,10 @@ pub async fn run_interactive_mode(mut project_ctx: ProjectContext, module: Optio
         Some(ref m) if m == "tol" => {
             project_ctx.set_current_module("tol".to_string());
             run_tol_interactive(project_ctx).await?;
+        },
+        Some(ref m) if m == "team" => {
+            project_ctx.set_current_module("team".to_string());
+            run_team_interactive(project_ctx).await?;
         },
         Some(ref m) => {
             println!("{} Module '{}' not recognized", "⚠".yellow(), m);
@@ -50,13 +50,13 @@ pub async fn run_interactive_mode(mut project_ctx: ProjectContext, module: Optio
 async fn run_main_interactive(project_ctx: ProjectContext) -> Result<()> {
     loop {
         let options = vec![
+            "Team Management",
+            "Project Management",
             "Requirements Management",
             "Risk Management",
-            "Verification & Testing",
-            "Quality Management (Legacy)",
-            "Project Management", 
             "Tolerance Analysis",
-            "Project Status",
+            "Verification & Testing",
+            "Program Status",
             "Exit",
         ];
         
@@ -65,26 +65,26 @@ async fn run_main_interactive(project_ctx: ProjectContext) -> Result<()> {
             .prompt()?;
         
         match selection {
+            "Team Management" => {
+                run_team_interactive(project_ctx.clone()).await?;
+            },
+            "Project Management" => {
+                run_pm_interactive(project_ctx.clone()).await?;
+            },
             "Requirements Management" => {
                 run_requirements_interactive(project_ctx.clone()).await?;
             },
             "Risk Management" => {
                 run_risk_interactive(project_ctx.clone()).await?;
             },
-            "Verification & Testing" => {
-                run_verification_interactive(project_ctx.clone()).await?;
-            },
-            "Quality Management (Legacy)" => {
-                run_quality_interactive(project_ctx.clone()).await?;
-            },
-            "Project Management" => {
-                run_pm_interactive(project_ctx.clone()).await?;
-            },
             "Tolerance Analysis" => {
                 run_tol_interactive(project_ctx.clone()).await?;
             },
-            "Project Status" => {
-                show_project_status(&project_ctx)?;
+            "Verification & Testing" => {
+                run_verification_interactive(project_ctx.clone()).await?;
+            },
+            "Program Status" => {
+                show_program_status(&project_ctx)?;
             },
             "Exit" => {
                 println!("{}", "Goodbye!".green());
@@ -230,44 +230,10 @@ async fn run_verification_interactive(project_ctx: ProjectContext) -> Result<()>
     Ok(())
 }
 
-async fn run_quality_interactive(project_ctx: ProjectContext) -> Result<()> {
-    loop {
-        println!("\n{}", "Quality Management".bold().blue());
-        
-        let options = vec![
-            "📈 Dashboard",
-            "← Back to Main Menu",
-        ];
-        
-        let selection = Select::new("Select category:", options)
-            .with_help_message("Choose a quality management category")
-            .prompt()?;
-        
-        let result = match selection {
-            "📈 Dashboard" => {
-                execute_quality_command(QualityCommands::Dashboard, project_ctx.clone()).await
-            },
-            "← Back to Main Menu" => {
-                break;
-            },
-            _ => {
-                println!("{}", "This functionality has been moved to the new modular structure.".yellow());
-                println!("Use 'Requirements Management', 'Risk Management', or 'Verification & Testing' from the main menu.");
-                Ok(())
-            },
-        };
-        
-        if let Err(e) = result {
-            println!("{} Error: {}", "✗".red(), e);
-        }
-    }
-    
-    Ok(())
-}
 
 
-fn show_project_status(project_ctx: &ProjectContext) -> Result<()> {
-    println!("\n{}", "Project Status".bold().blue());
+fn show_program_status(project_ctx: &ProjectContext) -> Result<()> {
+    println!("\n{}", "Program Status".bold().blue());
     println!("Name: {}", project_ctx.metadata.name);
     println!("Description: {}", project_ctx.metadata.description);
     println!("Version: {}", project_ctx.metadata.version);
@@ -833,6 +799,223 @@ async fn run_design_controls_submenu(project_ctx: ProjectContext) -> Result<()> 
     
     Ok(())
 }
+
+// Team Management Functions
+async fn run_team_interactive(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Team Management".bold().blue());
+        
+        let options = vec![
+            "👥 Team Members",
+            "🎭 Roles",
+            "🏢 Teams",
+            "✅ Git Integration",
+            "📊 Dashboard",
+            "← Back to Main Menu",
+        ];
+        
+        let selection = Select::new("Select category:", options)
+            .with_help_message("Choose a team management category")
+            .prompt()?;
+        
+        let result = match selection {
+            "👥 Team Members" => {
+                run_team_members_submenu(project_ctx.clone()).await
+            },
+            "🎭 Roles" => {
+                run_roles_submenu(project_ctx.clone()).await
+            },
+            "🏢 Teams" => {
+                run_teams_submenu(project_ctx.clone()).await
+            },
+            "✅ Git Integration" => {
+                run_git_integration_submenu(project_ctx.clone()).await
+            },
+            "📊 Dashboard" => {
+                execute_team_command(TeamCommands::Dashboard, project_ctx.clone()).await
+            },
+            "← Back to Main Menu" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+async fn run_team_members_submenu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Team Management - Team Members".bold().blue());
+        
+        let options = vec![
+            "➕ Add Team Member",
+            "📋 List Team Members",
+            "✏️  Edit Team Member",
+            "🗑️  Remove Team Member",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select action:", options)
+            .with_help_message("Choose what to do with team members")
+            .prompt()?;
+        
+        let result = match selection {
+            "➕ Add Team Member" => {
+                execute_team_command(TeamCommands::AddMember, project_ctx.clone()).await
+            },
+            "📋 List Team Members" => {
+                execute_team_command(TeamCommands::ListMembers, project_ctx.clone()).await
+            },
+            "✏️  Edit Team Member" => {
+                execute_team_command(TeamCommands::EditMember, project_ctx.clone()).await
+            },
+            "🗑️  Remove Team Member" => {
+                execute_team_command(TeamCommands::DeactivateMember, project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+async fn run_roles_submenu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Team Management - Roles".bold().blue());
+        
+        let options = vec![
+            "➕ Add Role",
+            "📋 List Roles",
+            "✏️  Edit Role",
+            "🗑️  Remove Role",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select action:", options)
+            .with_help_message("Choose what to do with roles")
+            .prompt()?;
+        
+        let result = match selection {
+            "➕ Add Role" => {
+                execute_team_command(TeamCommands::AddRole, project_ctx.clone()).await
+            },
+            "📋 List Roles" => {
+                execute_team_command(TeamCommands::ListRoles, project_ctx.clone()).await
+            },
+            "✏️  Edit Role" => {
+                execute_team_command(TeamCommands::EditRole, project_ctx.clone()).await
+            },
+            "🗑️  Remove Role" => {
+                execute_team_command(TeamCommands::RemoveRole, project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+async fn run_teams_submenu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Team Management - Teams".bold().blue());
+        
+        let options = vec![
+            "➕ Create Team",
+            "📋 List Teams",
+            "✏️  Edit Team",
+            "🗑️  Remove Team",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select action:", options)
+            .with_help_message("Choose what to do with teams")
+            .prompt()?;
+        
+        let result = match selection {
+            "➕ Create Team" => {
+                execute_team_command(TeamCommands::AddTeam, project_ctx.clone()).await
+            },
+            "📋 List Teams" => {
+                execute_team_command(TeamCommands::ListTeams, project_ctx.clone()).await
+            },
+            "✏️  Edit Team" => {
+                execute_team_command(TeamCommands::EditTeam, project_ctx.clone()).await
+            },
+            "🗑️  Remove Team" => {
+                execute_team_command(TeamCommands::RemoveMemberFromTeam, project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
+async fn run_git_integration_submenu(project_ctx: ProjectContext) -> Result<()> {
+    loop {
+        println!("\n{}", "Team Management - Git Integration".bold().blue());
+        
+        let options = vec![
+            "📝 Generate CODEOWNERS",
+            "🔄 Sync with Git Teams",
+            "✅ Validate Git Setup",
+            "← Back",
+        ];
+        
+        let selection = Select::new("Select action:", options)
+            .with_help_message("Choose git integration actions")
+            .prompt()?;
+        
+        let result = match selection {
+            "📝 Generate CODEOWNERS" => {
+                execute_team_command(TeamCommands::GenerateCodeowners, project_ctx.clone()).await
+            },
+            "🔄 Sync with Git Teams" => {
+                execute_team_command(TeamCommands::GitSync, project_ctx.clone()).await
+            },
+            "✅ Validate Git Setup" => {
+                execute_team_command(TeamCommands::Validate, project_ctx.clone()).await
+            },
+            "← Back" => {
+                break;
+            },
+            _ => Ok(()),
+        };
+        
+        if let Err(e) = result {
+            println!("{} Error: {}", "✗".red(), e);
+        }
+    }
+    
+    Ok(())
+}
+
 
 // PM Project Risk Management Menu
 async fn run_pm_risk_menu(project_ctx: ProjectContext) -> Result<()> {
