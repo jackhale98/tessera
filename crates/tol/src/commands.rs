@@ -476,6 +476,9 @@ impl ToleranceCommands {
         let features_map = self.repository.get_features().into_iter()
             .map(|f| (f.id.into(), f.clone()))
             .collect();
+        let components_map = self.repository.get_components().into_iter()
+            .map(|c| (c.id.into(), c.clone()))
+            .collect();
         
         // Export plots for each selected analysis
         for analysis in analyses_to_export {
@@ -503,7 +506,7 @@ impl ToleranceCommands {
                 let waterfall_filename = format!("{}_waterfall.{}", base_filename, format.extension());
                 let waterfall_path = plots_dir.join(&waterfall_filename);
                 
-                match plotter.export_waterfall(analysis, stackup, &features_map, *format, &waterfall_path) {
+                match plotter.export_waterfall(analysis, stackup, &features_map, &components_map, *format, &waterfall_path) {
                     Ok(_) => println!("✓ Exported waterfall plot: {}", waterfall_filename),
                     Err(e) => println!("✗ Failed to export waterfall plot: {}", e),
                 }
