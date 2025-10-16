@@ -1,0 +1,490 @@
+# Engineering Development Toolkit (EDT)
+
+## Vision
+
+EDT is an open-source engineering lifecycle management system that helps teams follow best practices like the V-Model and ISO standards throughout product development. Built on a foundation of plain text files and Git version control, EDT provides transparency, traceability, and collaboration while scaling from individual learning to enterprise innovation.
+
+## Core Philosophy
+
+**Plain Text Everything**: All engineering data stored as human-readable RON (Rusty Object Notation) files, enabling:
+- Full transparency into project state
+- Powerful Git-based version control
+- Easy diffing and merging
+- Long-term data accessibility
+- No vendor lock-in
+
+**Git-Native Collaboration**: Rather than building complex real-time collaboration features, EDT embraces Git's proven distributed workflow:
+- Branch for different design iterations
+- Pull requests for design reviews
+- Merge conflicts resolved with familiar Git tools
+- Complete audit trail through commit history
+
+**Schema-Driven Design**: Every entity type has a defined schema that automatically generates:
+- Creation and edit forms in the GUI
+- Validation rules
+- Link type suggestions
+- Property lookups
+- Calculation dispatch
+
+## Key Features
+
+### Six Integrated Modules
+
+#### 1. Project Management
+Comprehensive schedule and resource management:
+- Tasks with dependencies (FF, FS, SF, SS)
+- Milestones and baselines
+- Critical path analysis
+- Slack analysis
+- Resource allocation with custom calendars
+- Earned Value Management (EVM)
+- Multiple task types: effort-driven, duration-driven, work-driven
+- Automatic and manual scheduling modes
+- Gantt chart exports
+
+#### 2. Requirements Management
+V-Model requirement tracking:
+- User → System → Design → Software requirement hierarchy
+- Bidirectional traceability
+- Gap analysis (missing links between levels)
+- Coverage analysis (requirements without verification)
+- Integration with design outputs and verification activities
+- Custom requirement types via configuration
+
+#### 3. Risk Management
+FMEA-based risk assessment:
+- Hazard identification with causes and harms
+- Risk evaluation with probability, severity, and risk scores
+- Risk controls and mitigation strategies
+- Residual risk assessment
+- Link risks to design components, manufacturing steps, or software
+- Configurable risk matrices and scoring
+- Warnings for unmitigated risks
+
+#### 4. Design, BOM & Tolerance Analysis
+Engineering design management:
+- Assemblies and components with revisions
+- Features and mates for tolerance analysis
+- Worst-case, RSS, and Monte Carlo tolerance stackups
+- MMC/LMC calculations for mated features
+- Process capability metrics (Cp, Cpk)
+- BOM generation with cost estimation
+- Multi-supplier quote management
+- Cost interpolation across volumes
+- Assembly matrices showing component relationships
+
+#### 5. Verification & Validation
+Test and validation tracking:
+- Generic verification entities
+- Generic validation entities
+- Links to requirements and risks
+- Future expansion planned for test case management
+
+#### 6. Manufacturing
+Production documentation (future expansion):
+- Generic manufacturing entities
+- Links to design components and risks
+- Structure for future process flow and work instruction features
+
+### Cross-Cutting Features
+
+**Flexible Linking System**
+- Bidirectional links between any compatible entity types
+- UUID-based or snowflake IDs
+- Schema-driven link suggestions
+- Impact analysis showing all affected entities
+- Filterable link views
+
+**Comment System**
+- Comments can be attached to any entity
+- Thread-based discussions (comments link to parent comments)
+- Tag team members from project resources
+- Local cache tracks seen/unseen comments
+- Dashboard shows unread comments after git pull
+
+**Dashboard**
+Real-time project health overview:
+- Project completion percentage
+- Estimated end date
+- Most behind-schedule critical path task
+- Risks without mitigations
+- Requirements without verification
+- Failed tolerance analyses
+- Unread comments and notifications
+- Favorite entities (quick access)
+
+**Local User Preferences**
+Non-versioned local cache stores:
+- Which resource entity represents the current user
+- Seen/unseen comments and notifications
+- Favorite entity IDs
+- UI preferences
+- Recently accessed entities
+
+**Search & Discovery**
+- Robust entity filtering by type, status, date, assigned user
+- Full-text search (if efficient crate available)
+- Favorite entities on dashboard
+- Entity relationship graph exploration
+
+**Undo/Redo**
+State history for all entity changes:
+- Undo recent modifications
+- Redo undone changes
+- Limited history depth (configurable)
+
+## Technical Architecture
+
+### Technology Stack
+
+**Backend**: Rust
+- Fast, safe, cross-platform
+- Tauri for desktop application framework
+- RON for human-readable data serialization
+- Git2 for version control integration
+- SQLite for query cache
+- Petgraph for DAG operations
+
+**Frontend**: React + TypeScript
+- Modern, maintainable web technologies
+- Schema-driven form generation
+- Responsive desktop UI
+- Rich visualization components
+
+### Data Storage
+
+```
+project-repo/
+├── .edt/
+│   ├── config.ron              # Project configuration
+│   ├── schema/                 # Schema definitions by version
+│   └── .cache/                 # Local, non-versioned cache
+│       ├── query.db            # SQLite query cache
+│       └── user_prefs.ron      # User preferences
+├── entities/
+│   ├── tasks/                  # Project management entities
+│   ├── requirements/           # Requirement entities
+│   ├── risks/                  # Risk entities
+│   ├── design/                 # Design entities
+│   ├── verification/           # V&V entities
+│   ├── manufacturing/          # Manufacturing entities
+│   ├── comments/               # Comment entities
+│   └── general/                # General-purpose entities
+└── .gitignore                  # Excludes .cache/
+```
+
+### System Components
+
+1. **RON File Storage**: Source of truth for all entities
+2. **API Layer**: Atomic operations with automatic cache updates
+3. **SQLite Cache**: Fast queries and full-text search
+4. **DAG Manager**: Entity relationship graph for impact analysis
+5. **Calculation Engine**: Module-specific calculations (EVM, tolerance, etc.)
+6. **Schema Registry**: Central entity type definitions
+7. **GUI**: Tauri-based desktop application
+
+## Getting Started
+
+### Installation
+
+```bash
+# Download latest release for your platform
+# Windows: edt-setup.exe
+# macOS: edt.dmg
+# Linux: edt.AppImage
+
+# Or build from source
+git clone https://github.com/your-org/edt
+cd edt
+cargo build --release
+```
+
+### Creating a New Project
+
+1. Launch EDT
+2. File → New Project
+3. Choose project directory (will become Git repository)
+4. Configure initial settings (work hours, calendars, risk matrices)
+5. Initialize Git repository (automatic)
+6. Start creating entities!
+
+### Basic Workflow
+
+#### 1. Define Requirements
+- Create user requirements
+- Break down into system requirements
+- Further detail as design requirements
+- Link requirements hierarchically
+
+#### 2. Design & Analysis
+- Create assemblies and components
+- Define features with tolerances
+- Create mates between features
+- Run tolerance stackup analyses
+- Generate BOMs with cost estimates
+
+#### 3. Risk Assessment
+- Identify hazards
+- Create associated risks
+- Link risks to design components
+- Define risk controls
+- Assess residual risk
+
+#### 4. Verification & Validation
+- Create verification entities
+- Link to requirements and risks
+- Track verification status
+
+#### 5. Project Management
+- Create tasks for all work activities
+- Define dependencies
+- Assign resources
+- Track progress with EVM
+- Monitor critical path
+
+#### 6. Review & Iterate
+- Use dashboard to identify issues
+- Review impact analysis when changing entities
+- Read comments from team members
+- Commit changes to Git
+- Create baselines at milestones
+
+### Entity Status Workflow
+
+All entities follow a standard approval workflow:
+1. **Draft**: Initial creation, work in progress
+2. **Pending Approval**: Ready for review
+3. **Approved**: Reviewed and accepted
+4. **Released**: Finalized and locked for production
+
+Status transitions managed through Git pull request reviews.
+
+## Configuration
+
+Project-wide settings in `.edt/config.ron`:
+
+```ron
+Config(
+    // Work calendar
+    work_hours_per_day: 8.0,
+    work_days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+    holidays: ["2025-12-25", "2026-01-01"],
+    
+    // Critical path
+    critical_path_milestone_id: Some("milestone-001"),
+    
+    // Custom requirement types
+    requirement_types: [
+        "User Requirement",
+        "System Requirement", 
+        "Design Requirement",
+        "Software Requirement",
+        "Safety Requirement",  // Custom
+    ],
+    
+    // Risk matrix
+    severity_levels: [1, 2, 3, 4, 5],
+    probability_levels: [1, 2, 3, 4, 5],
+    risk_matrix: {
+        (1,1): 1, (1,2): 2, (1,3): 3, (1,4): 4, (1,5): 5,
+        // ... full matrix
+    },
+    acceptable_risk_threshold: 10,
+    
+    // Warnings
+    warn_hazard_without_risk: true,
+    warn_risk_without_control: true,
+    warn_risk_without_verification: true,
+    
+    // Custom entity types
+    general_entity_types: [
+        "Test Equipment",
+        "Software Module",
+        "Standard Operating Procedure",
+    ],
+)
+```
+
+## Use Cases
+
+### Individual Learner
+- Learn engineering best practices through hands-on use
+- Experiment with V-Model methodology
+- Practice FMEA and tolerance analysis
+- Build portfolio projects demonstrating systematic approach
+
+### Small Team (2-10 people)
+- Share project through Git repository
+- Branch for parallel development
+- Review changes through pull requests
+- Track work with project management module
+- Maintain traceability for regulatory compliance
+
+### Growing Company (10-100 people)
+- Standardized engineering processes
+- Complete design history file (DHF)
+- Risk management for ISO 13485
+- BOM and cost tracking for production
+- Resource planning across multiple projects
+
+### Open Source Hardware
+- Transparent development process
+- Community contributions via Git
+- Public design reviews
+- Complete documentation for manufacturers
+- Reproducible tolerance and cost analyses
+
+## Best Practices
+
+### Git Workflow
+- Commit frequently with descriptive messages
+- Create branches for major design changes
+- Use pull requests for peer review
+- Tag releases and baselines
+- Write meaningful commit messages: "Updated task-042: Extended deadline due to supplier delay"
+
+### Entity Organization
+- Use consistent naming conventions
+- Leverage status field to track review state
+- Link entities generously for traceability
+- Add detailed descriptions and notes
+- Regularly review dashboard warnings
+
+### Tolerance Analysis
+- Define features on all critical dimensions
+- Use appropriate distribution types (normal, uniform, triangle)
+- Run worst-case first, then RSS or Monte Carlo
+- Document assumptions in notes
+- Link analyses to requirements
+
+### Risk Management
+- Start with hazard analysis
+- Create risks for each hazard scenario
+- Link risks to specific design elements
+- Define controls before marking risk as released
+- Verify control effectiveness
+
+### Requirements Traceability
+- Maintain clear hierarchy (User → System → Design)
+- Link to design outputs explicitly
+- Connect verification activities
+- Review coverage regularly
+- Document rationale for design decisions
+
+## Keyboard Shortcuts
+
+- `Ctrl+N`: New entity
+- `Ctrl+S`: Save entity
+- `Ctrl+F`: Search/filter
+- `Ctrl+L`: Show links for selected entity
+- `Ctrl+Z`: Undo
+- `Ctrl+Shift+Z`: Redo
+- `Ctrl+G`: Commit to Git
+- `Ctrl+/`: Toggle dashboard
+
+## Contributing
+
+EDT is open source and welcomes contributions!
+
+### Development Setup
+```bash
+git clone https://github.com/your-org/edt
+cd edt
+cargo install tauri-cli
+npm install
+cargo test
+npm run dev
+```
+
+### Testing
+- Write tests for all API functions
+- Test schema validation
+- Test calculation engines
+- Test Git integration
+- Run full test suite before submitting PR
+
+### Code Style
+- Follow Rust standard formatting (`cargo fmt`)
+- Write doc comments for public APIs
+- Keep functions focused and small
+- Use meaningful variable names
+- Add comments for complex logic
+
+### Submitting Changes
+1. Fork repository
+2. Create feature branch
+3. Write tests for new functionality
+4. Ensure all tests pass
+5. Submit pull request with clear description
+6. Respond to code review feedback
+
+## Roadmap
+
+### Version 1.0 (MVP)
+- Core entity CRUD operations
+- Project management module
+- Basic linking system
+- SQLite cache with incremental updates
+- Simple GUI with entity list/detail views
+- Git integration (commit on save)
+
+### Version 1.5
+- Requirements module
+- Risk module
+- Comment system
+- Dashboard with warnings
+- Impact analysis
+- Search and filtering
+
+### Version 2.0
+- Design, BOM, and tolerance analysis module
+- Tolerance calculations (worst-case, RSS, Monte Carlo)
+- Quote management and cost interpolation
+- Gantt chart visualization
+- Baseline comparison
+- Traceability matrix export
+
+### Version 2.5
+- Verification & validation module
+- Manufacturing module
+- Advanced exports (CSV, PDF reports)
+- Full-text search
+- Undo/redo functionality
+
+### Version 3.0+
+- Plugin architecture
+- Mobile companion app
+- Cloud sync option (optional)
+- CAD file integration
+- Advanced analytics
+
+## Support
+
+- **Documentation**: See `/docs` folder
+- **Issues**: [GitHub Issues](https://github.com/your-org/edt/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-org/edt/discussions)
+- **Email**: support@edt-project.org
+
+## License
+
+EDT is released under the MIT License. See LICENSE file for details.
+
+## Acknowledgments
+
+Built with:
+- Rust programming language
+- Tauri application framework
+- React and TypeScript
+- SQLite database
+- Git version control
+
+Inspired by best practices from:
+- ISO 13485 (Medical Device Quality Management)
+- ISO 14971 (Risk Management)
+- V-Model systems engineering
+- Failure Mode and Effects Analysis (FMEA)
+
+---
+
+**EDT: Engineering Development Toolkit**  
+*Transparent, Traceable, Collaborative Engineering*

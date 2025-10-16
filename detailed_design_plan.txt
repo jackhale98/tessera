@@ -1,0 +1,2689 @@
+# Engineering Development Toolkit - Detailed Design Plan
+
+## Project Overview
+
+This document provides comprehensive technical guidance for implementing EDT. Follow test-driven development (TDD) principles throughout: write tests first, implement to pass tests, refactor while maintaining green tests.
+
+## Technology Stack
+
+### Core Dependencies (Cargo.toml)
+
+```toml
+[dependencies]
+# Desktop framework
+tauri = { version = "2.1", features = ["protocol-asset"] }
+
+# Async runtime
+tokio = { version = "1.38", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+ron = "0.8"
+serde_json = "1.0"
+
+# Git integration
+git2 = "0.18"
+
+# Database
+sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio-native-tls"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# Search (if available)
+tantivy = "0.21"  # Optional: full-text search
+
+# Graph operations
+petgraph = "0.6"
+
+# Hashing for change detection
+blake3 = "1.5"
+
+# UUID generation
+uuid = { version = "1.8", features = ["v4", "serde"] }
+
+# Date/time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Validation
+validator = { version = "0.16", features = ["derive"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Statistical analysis (for tolerance Monte Carlo)
+statrs = "0.16"
+rand = "0.8"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+[dev-dependencies]
+# Testing
+rstest = "0.19"
+tempfile = "3.10"
+mockall = "0.12"
+proptest = "1.4"
+
+# Benchmarking
+criterion = "0.5"
+```
+
+### Frontend Dependencies (package.json)
+
+```json
+{
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@tauri-apps/api": "^2.1.0",
+    "@tauri-apps/plugin-shell": "^2.0.0",
+    
+    "zustand": "^4.5.2",
+    "@tanstack/react-query": "^5.32.0",
+    "react-router-dom": "^6.23.0",
+    
+    "react-hook-form": "^7.51.3",
+    "zod": "^3.23.6",
+    "@hookform/resolvers": "^3.3.4",
+    
+    "recharts": "^2.12.5",
+    "reactflow": "^11.11.3",
+    "vis-network": "^9.1.9",
+    "d3": "^7.9.0",
+    
+    "@tanstack/react-table": "^8.16.0",
+    "date-fns": "^3.6.0",
+    
+    "lucide-react": "^0.378.0",
+    "tailwindcss": "^3.4.3"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.11",
+    
+    "vitest": "^1.5.3",
+    "@testing-library/react": "^15.0.6",
+    "@testing-library/jest-dom": "^6.4.2",
+    "msw": "^2.2.14"
+  }
+}
+```
+
+## System Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Tauri Desktop App                    │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  ┌─────────────────────────────────────────────────┐  │
+│  │          Frontend (React + TypeScript)          │  │
+│  │  ┌─────────────────────────────────────────┐   │  │
+│  │  │  UI Components (shadcn/ui + custom)    │   │  │
+│  │  └─────────────────────────────────────────┘   │  │
+│  │  ┌─────────────────────────────────────────┐   │  │
+│  │  │  State Management (Zustand)             │   │  │
+│  │  └─────────────────────────────────────────┘   │  │
+│  │  ┌─────────────────────────────────────────┐   │  │
+│  │  │  API Client (@tauri-apps/api)           │   │  │
+│  │  └─────────────────────────────────────────┘   │  │
+│  └─────────────────────────────────────────────────┘  │
+│                        ↕ IPC                           │
+│  ┌─────────────────────────────────────────────────┐  │
+│  │              Rust Backend Core                  │  │
+│  │                                                 │  │
+│  │  ┌───────────────────────────────────────────┐ │  │
+│  │  │  Tauri Commands (API Layer)              │ │  │
+│  │  │  - validate & execute atomic operations │ │  │
+│  │  └───────────────────────────────────────────┘ │  │
+│  │                     ↓                           │  │
+│  │  ┌───────────────────────────────────────────┐ │  │
+│  │  │  Core Services                           │ │  │
+│  │  │  ┌─────────────────────────────────────┐ │ │  │
+│  │  │  │ EntityManager                       │ │ │  │
+│  │  │  │  - CRUD operations                  │ │ │  │
+│  │  │  │  - Schema validation                │ │ │  │
+│  │  │  │  - State history (undo/redo)        │ │ │  │
+│  │  │  └─────────────────────────────────────┘ │ │  │
+│  │  │  ┌─────────────────────────────────────┐ │ │  │
+│  │  │  │ LinkManager                         │ │ │  │
+│  │  │  │  - Bidirectional linking            │ │ │  │
+│  │  │  │  - Link validation                  │ │ │  │
+│  │  │  │  - Impact analysis                  │ │ │  │
+│  │  │  └─────────────────────────────────────┘ │ │  │
+│  │  │  ┌─────────────────────────────────────┐ │ │  │
+│  │  │  │ CalculationEngine                   │ │ │  │
+│  │  │  │  - Critical path (CPM)              │ │ │  │
+│  │  │  │  - EVM calculations                 │ │ │  │
+│  │  │  │  - Tolerance analysis               │ │ │  │
+│  │  │  │  - BOM cost estimation              │ │ │  │
+│  │  │  └─────────────────────────────────────┘ │ │  │
+│  │  │  ┌─────────────────────────────────────┐ │ │  │
+│  │  │  │ CacheManager                        │ │ │  │
+│  │  │  │  - Incremental cache updates        │ │ │  │
+│  │  │  │  - File hash tracking               │ │ │  │
+│  │  │  │  - Query optimization               │ │ │  │
+│  │  │  └─────────────────────────────────────┘ │ │  │
+│  │  │  ┌─────────────────────────────────────┐ │ │  │
+│  │  │  │ SchemaRegistry                      │ │ │  │
+│  │  │  │  - Entity type definitions          │ │ │  │
+│  │  │  │  - Validation rules                 │ │ │  │
+│  │  │  │  - Link compatibility               │ │ │  │
+│  │  │  │  - Migration framework              │ │ │  │
+│  │  │  └─────────────────────────────────────┘ │ │  │
+│  │  └───────────────────────────────────────────┘ │  │
+│  │                     ↓                           │  │
+│  │  ┌───────────────────────────────────────────┐ │  │
+│  │  │  Storage Layer                           │ │  │
+│  │  │  ┌─────────────────────────────────────┐ │ │  │
+│  │  │  │ RONStorage                          │ │ │  │
+│  │  │  │  - Read/write RON files             │ │ │  │
+│  │  │  │  - Atomic file operations           │ │ │  │
+│  │  │  │  - File locking                     │ │ │  │
+│  │  │  └─────────────────────────────────────┘ │ │  │
+│  │  │  ┌─────────────────────────────────────┐ │ │  │
+│  │  │  │ GitIntegration                      │ │ │  │
+│  │  │  │  - Auto-commit on save              │ │ │  │
+│  │  │  │  - Status tracking                  │ │ │  │
+│  │  │  │  - Repository management            │ │ │  │
+│  │  │  └─────────────────────────────────────┘ │ │  │
+│  │  │  ┌─────────────────────────────────────┐ │ │  │
+│  │  │  │ SQLiteCache                         │ │ │  │
+│  │  │  │  - Entity indexing                  │ │ │  │
+│  │  │  │  - Link graph                       │ │ │  │
+│  │  │  │  - Full-text search (optional)      │ │ │  │
+│  │  │  │  - User preferences (local)         │ │ │  │
+│  │  │  └─────────────────────────────────────┘ │ │  │
+│  │  │  ┌─────────────────────────────────────┐ │ │  │
+│  │  │  │ DAGManager (petgraph)               │ │ │  │
+│  │  │  │  - Entity relationship graph        │ │ │  │
+│  │  │  │  - Cycle detection                  │ │ │  │
+│  │  │  │  - Traversal algorithms             │ │ │  │
+│  │  │  └─────────────────────────────────────┘ │ │  │
+│  │  └───────────────────────────────────────────┘ │  │
+│  └─────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+                        ↕
+┌─────────────────────────────────────────────────────────┐
+│              File System (Git Repository)               │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │  .edt/                                          │   │
+│  │    ├── config.ron                               │   │
+│  │    ├── schema/ (versioned)                      │   │
+│  │    └── .cache/ (gitignored)                     │   │
+│  │        ├── query.db                             │   │
+│  │        ├── user_prefs.ron                       │   │
+│  │        └── file_hashes.ron                      │   │
+│  ├─────────────────────────────────────────────────┤   │
+│  │  entities/                                      │   │
+│  │    ├── tasks/                                   │   │
+│  │    ├── milestones/                              │   │
+│  │    ├── resources/                               │   │
+│  │    ├── requirements/                            │   │
+│  │    ├── risks/                                   │   │
+│  │    ├── assemblies/                              │   │
+│  │    ├── components/                              │   │
+│  │    ├── features/                                │   │
+│  │    ├── comments/                                │   │
+│  │    └── general/                                 │   │
+│  └─────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Data Structures (RON Schemas)
+
+### Core Entity Types
+
+All entities share common base fields:
+
+```rust
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+use chrono::{DateTime, Utc};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EntityMetadata {
+    pub id: Uuid,
+    pub entity_type: EntityType,
+    pub schema_version: String,  // e.g., "1.0.0"
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub status: EntityStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum EntityStatus {
+    Draft,
+    PendingApproval,
+    Approved,
+    Released,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum EntityType {
+    Task,
+    Milestone,
+    Resource,
+    Calendar,
+    Baseline,
+    Requirement,
+    Hazard,
+    Risk,
+    RiskControl,
+    Assembly,
+    Component,
+    Feature,
+    Mate,
+    Stackup,
+    Supplier,
+    Quote,
+    Verification,
+    Validation,
+    Manufacturing,
+    Comment,
+    General,
+}
+```
+
+### Project Management Entities
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Task {
+    pub metadata: EntityMetadata,
+    pub name: String,
+    pub description: String,
+    pub notes: Option<String>,
+    
+    // Scheduling
+    pub scheduled_start: DateTime<Utc>,
+    pub deadline: DateTime<Utc>,
+    pub actual_start: Option<DateTime<Utc>>,
+    pub actual_end: Option<DateTime<Utc>>,
+    
+    // Task type
+    pub task_type: TaskType,
+    pub scheduling_mode: SchedulingMode,
+    
+    // Progress
+    pub percent_complete: f64,  // 0.0 to 1.0
+    pub percent_complete_history: Vec<(DateTime<Utc>, f64)>,
+    
+    // Resources and cost
+    pub assigned_resources: Vec<ResourceAssignment>,
+    pub estimated_effort: Option<f64>,  // hours
+    pub actual_cost: Option<f64>,
+    pub calculated_cost: Option<f64>,
+    
+    // Dependencies
+    pub dependencies: Vec<TaskDependency>,
+    
+    // Critical path analysis results
+    pub is_critical_path: bool,
+    pub slack: Option<f64>,  // days
+    
+    // Baseline data (added when baseline created)
+    pub baseline_data: Option<TaskBaseline>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TaskType {
+    EffortDriven,
+    DurationDriven,
+    WorkDriven,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SchedulingMode {
+    Automatic,
+    Manual,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceAssignment {
+    pub resource_id: Uuid,
+    pub allocated_hours: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskDependency {
+    pub predecessor_id: Uuid,
+    pub dependency_type: DependencyType,
+    pub lag_days: f64,  // can be negative for lead time
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum DependencyType {
+    FinishToStart,  // FS
+    StartToStart,   // SS
+    FinishToFinish, // FF
+    StartToFinish,  // SF
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskBaseline {
+    pub baseline_id: Uuid,
+    pub start: DateTime<Utc>,
+    pub end: DateTime<Utc>,
+    pub effort: f64,
+    pub cost: f64,
+    pub percent_complete: f64,
+    pub dependencies: Vec<TaskDependency>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Milestone {
+    pub metadata: EntityMetadata,
+    pub name: String,
+    pub description: String,
+    pub date: DateTime<Utc>,
+    pub dependencies: Vec<TaskDependency>,
+    pub is_critical_path: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Resource {
+    pub metadata: EntityMetadata,
+    pub name: String,
+    pub description: String,
+    pub email: Option<String>,
+    pub resource_type: ResourceType,
+    pub bill_rate: Option<f64>,
+    pub calendar_id: Option<Uuid>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ResourceType {
+    Labor,
+    FlatCost,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Calendar {
+    pub metadata: EntityMetadata,
+    pub name: String,
+    pub work_hours_per_day: f64,
+    pub work_days: Vec<chrono::Weekday>,
+    pub holidays: Vec<chrono::NaiveDate>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Baseline {
+    pub metadata: EntityMetadata,
+    pub name: String,
+    pub description: String,
+    pub created_date: DateTime<Utc>,
+    pub task_ids: Vec<Uuid>,  // Tasks included in baseline
+}
+```
+
+### Requirements Entities
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Requirement {
+    pub metadata: EntityMetadata,
+    pub name: String,
+    pub description: String,
+    pub notes: Option<String>,
+    pub requirement_type: String,  // From config
+    pub rationale: Option<String>,
+    pub source: Option<String>,
+    pub verification_method: Option<String>,
+}
+```
+
+### Risk Management Entities
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Hazard {
+    pub metadata: EntityMetadata,
+    pub name: String,
+    pub description: String,
+    pub notes: Option<String>,
+    pub causes: Vec<String>,
+    pub harms: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Risk {
+    pub metadata: EntityMetadata,
+    pub name: String,
+    pub description: String,
+    pub notes: Option<String>,
+    pub risk_type: String,  // From config
+    
+    // Initial risk assessment
+    pub probability: u32,
+    pub severity: u32,
+    pub risk_score: u32,  // Calculated from matrix
+    
+    // Residual risk (after controls)
+    pub residual_probability: Option<u32>,
+    pub residual_severity: Option<u32>,
+    pub residual_risk_score: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiskControl {
+    pub metadata: EntityMetadata,
+    pub name: String,
+    pub description: String,
+    pub notes: Option<String>,
+    pub control_type: String,  // From config
+}
+```
+
+### Design Entities
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Assembly {
+    pub metadata: EntityMetadata,
+    pub name: String,
+    pub description: String,
+    pub revision: String,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Component {
+    pub metadata: EntityMetadata,
+    pub name: String,
+    pub description: String,
+    pub revision: String,
+    pub part_number: Option<String>,
+    pub material: Option<String>,
+    pub mass: Option<f64>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Feature {
+    pub metadata: EntityMetadata,
+    pub name: String,
+    pub description: String,
+    pub notes: Option<String>,
+    pub feature_type: FeatureType,
+    pub nominal: f64,
+    pub upper_tolerance: f64,
+    pub lower_tolerance: f64,
+    pub distribution_type: DistributionType,
+    pub custom_mean: Option<f64>,
+    pub custom_std_dev: Option<f64>,
+    pub drawing_location: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum FeatureType {
+    External,
+    Internal,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum DistributionType {
+    Normal,
+    Uniform,
+    Triangular,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Mate {
+    pub metadata: EntityMetadata,
+    pub name: String,
+    pub description: String,
+    pub notes: Option<String>,
+    pub mate_type: MateType,
+    
+    // Calculated values
+    pub mmc: Option<f64>,  // Maximum Material Condition
+    pub lmc: Option<f64>,  // Least Material Condition
+    pub analysis_result: Option<MateAnalysisResult>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum MateType {
+    Clearance,
+    Transition,
+    InterferenceFit,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum MateAnalysisResult {
+    Pass,
+    Fail,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Stackup {
+    pub metadata: EntityMetadata,
+    pub name: String,
+    pub description: String,
+    pub notes: Option<String>,
+    pub analysis_type: Vec<AnalysisType>,
+    pub upper_spec_limit: Option<f64>,
+    pub lower_spec_limit: Option<f64>,
+    
+    // Analysis results
+    pub worst_case_result: Option<StackupResult>,
+    pub rss_result: Option<StackupResult>,
+    pub monte_carlo_result: Option<MonteCarloResult>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum AnalysisType {
+    WorstCase,
+    RSS,
+    MonteCarlo,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StackupResult {
+    pub mean: f64,
+    pub upper: f64,
+    pub lower: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MonteCarloResult {
+    pub mean: f64,
+    pub median: f64,
+    pub std_dev: f64,
+    pub upper: f64,
+    pub lower: f64,
+    pub cp: Option<f64>,   // Process capability
+    pub cpk: Option<f64>,  // Process capability index
+    pub ppm_failures: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StackupFeatureContribution {
+    pub feature_id: Uuid,
+    pub sign: ContributionSign,
+    pub contribution: f64,  // 0.0 to 1.0
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ContributionSign {
+    Positive,
+    Negative,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Supplier {
+    pub metadata: EntityMetadata,
+    pub name: String,
+    pub description: String,
+    pub contact_name: Option<String>,
+    pub address: Option<String>,
+    pub phone: Option<String>,
+    pub email: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Quote {
+    pub metadata: EntityMetadata,
+    pub quote_number: String,
+    pub quote_date: chrono::NaiveDate,
+    pub expiration_date: Option<chrono::NaiveDate>,
+    pub quantity_price_pairs: Vec<(u32, f64)>,
+    pub distribution_type: CostDistribution,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CostDistribution {
+    Linear,
+    Power,
+    Exponential,
+    Logarithmic,
+}
+```
+
+### Other Entities
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Verification {
+    pub metadata: EntityMetadata,
+    pub name: String,
+    pub description: String,
+    pub revision: String,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Validation {
+    pub metadata: EntityMetadata,
+    pub name: String,
+    pub description: String,
+    pub revision: String,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Manufacturing {
+    pub metadata: EntityMetadata,
+    pub name: String,
+    pub description: String,
+    pub revision: String,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Comment {
+    pub metadata: EntityMetadata,
+    pub author_resource_id: Uuid,
+    pub content: String,
+    pub parent_comment_id: Option<Uuid>,  // For threading
+    pub tagged_resource_ids: Vec<Uuid>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct General {
+    pub metadata: EntityMetadata,
+    pub name: String,
+    pub description: String,
+    pub notes: Option<String>,
+    pub custom_type: String,  // From config
+}
+```
+
+### Link System
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Link {
+    pub id: Uuid,
+    pub from_entity_id: Uuid,
+    pub from_entity_type: EntityType,
+    pub to_entity_id: Uuid,
+    pub to_entity_type: EntityType,
+    pub link_type: LinkType,
+    pub metadata: Option<LinkMetadata>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum LinkType {
+    // Generic
+    Related,
+    
+    // Hierarchical
+    Parent,
+    Child,
+    
+    // Design specific
+    Contains,     // Assembly → Component
+    PartOf,       // Component → Assembly
+    HasFeature,   // Component → Feature
+    Mates,        // Feature → Feature (via Mate)
+    UsedInStackup, // Feature → Stackup
+    
+    // Requirements
+    Derives,      // Parent req → child req
+    Satisfies,    // Design → Requirement
+    Verifies,     // Verification → Requirement/Risk
+    
+    // Risk
+    Mitigates,    // RiskControl → Risk
+    Hazardous,    // Component → Risk
+    
+    // BOM
+    Supplies,     // Supplier → Component
+    Quotes,       // Quote → Component
+    
+    // Comments
+    Comments,     // Comment → Any entity
+    Replies,      // Comment → Comment
+    
+    // Manufacturing
+    Manufactures, // Manufacturing → Component/Assembly
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LinkMetadata {
+    pub quantity: Option<u32>,  // For component-assembly links
+    pub notes: Option<String>,
+}
+```
+
+### Configuration
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectConfig {
+    pub schema_version: String,
+    
+    // Critical path
+    pub critical_path_milestone_id: Option<Uuid>,
+    
+    // Requirements
+    pub requirement_types: Vec<String>,
+    
+    // Risk management
+    pub risk_types: Vec<String>,
+    pub risk_control_types: Vec<String>,
+    pub severity_levels: Vec<u32>,
+    pub probability_levels: Vec<u32>,
+    pub risk_matrix: HashMap<(u32, u32), u32>,
+    pub acceptable_risk_threshold: u32,
+    pub warn_hazard_without_risk: bool,
+    pub warn_risk_without_control: bool,
+    pub warn_risk_without_verification: bool,
+    
+    // General entities
+    pub general_entity_types: Vec<String>,
+}
+```
+
+## SQLite Cache Schema
+
+```sql
+-- Entities table (for fast queries)
+CREATE TABLE entities (
+    id TEXT PRIMARY KEY,
+    entity_type TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    file_path TEXT NOT NULL,
+    file_hash TEXT NOT NULL,
+    schema_version TEXT NOT NULL,
+    
+    -- Indexed fields for common queries
+    assigned_resource_id TEXT,
+    scheduled_start INTEGER,
+    deadline INTEGER,
+    percent_complete REAL,
+    
+    -- Full entity JSON for reconstruction
+    entity_data TEXT NOT NULL
+);
+
+CREATE INDEX idx_entity_type ON entities(entity_type);
+CREATE INDEX idx_status ON entities(status);
+CREATE INDEX idx_assigned_resource ON entities(assigned_resource_id);
+CREATE INDEX idx_dates ON entities(scheduled_start, deadline);
+CREATE INDEX idx_updated_at ON entities(updated_at);
+
+-- Links table (for relationship queries)
+CREATE TABLE links (
+    id TEXT PRIMARY KEY,
+    from_entity_id TEXT NOT NULL,
+    from_entity_type TEXT NOT NULL,
+    to_entity_id TEXT NOT NULL,
+    to_entity_type TEXT NOT NULL,
+    link_type TEXT NOT NULL,
+    metadata TEXT,
+    created_at INTEGER NOT NULL,
+    
+    FOREIGN KEY (from_entity_id) REFERENCES entities(id),
+    FOREIGN KEY (to_entity_id) REFERENCES entities(id)
+);
+
+CREATE INDEX idx_links_from ON links(from_entity_id);
+CREATE INDEX idx_links_to ON links(to_entity_id);
+CREATE INDEX idx_link_type ON links(link_type);
+CREATE INDEX idx_links_bidirectional ON links(from_entity_id, to_entity_id);
+
+-- File hashes for incremental updates
+CREATE TABLE file_hashes (
+    file_path TEXT PRIMARY KEY,
+    hash TEXT NOT NULL,
+    last_checked INTEGER NOT NULL
+);
+
+-- User preferences (local, non-versioned)
+CREATE TABLE user_preferences (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+-- Seen comments tracking
+CREATE TABLE seen_comments (
+    comment_id TEXT PRIMARY KEY,
+    seen_at INTEGER NOT NULL
+);
+
+-- Favorite entities
+CREATE TABLE favorites (
+    entity_id TEXT PRIMARY KEY,
+    added_at INTEGER NOT NULL
+);
+
+-- Full-text search (optional, if using SQLite FTS5)
+CREATE VIRTUAL TABLE entities_fts USING fts5(
+    entity_id,
+    name,
+    description,
+    notes,
+    content='entities',
+    content_rowid='rowid'
+);
+
+-- Triggers to keep FTS in sync
+CREATE TRIGGER entities_ai AFTER INSERT ON entities BEGIN
+    INSERT INTO entities_fts(entity_id, name, description, notes)
+    VALUES (new.id, new.name, new.description, 
+            json_extract(new.entity_data, '$.notes'));
+END;
+
+CREATE TRIGGER entities_ad AFTER DELETE ON entities BEGIN
+    DELETE FROM entities_fts WHERE entity_id = old.id;
+END;
+
+CREATE TRIGGER entities_au AFTER UPDATE ON entities BEGIN
+    UPDATE entities_fts 
+    SET name = new.name,
+        description = new.description,
+        notes = json_extract(new.entity_data, '$.notes')
+    WHERE entity_id = new.id;
+END;
+```
+
+## API Layer Design (Tauri Commands)
+
+### Command Pattern
+
+All Tauri commands follow CQRS pattern:
+
+```rust
+// src/commands/mod.rs
+
+use tauri::State;
+use crate::core::{AppState, EdtError, EdtResult};
+
+// Query commands (read-only)
+pub mod queries {
+    use super::*;
+    
+    #[tauri::command]
+    pub async fn get_entity(
+        state: State<'_, AppState>,
+        entity_id: String,
+    ) -> EdtResult<Entity> {
+        state.entity_manager.get(&entity_id.parse()?).await
+    }
+    
+    #[tauri::command]
+    pub async fn list_entities(
+        state: State<'_, AppState>,
+        entity_type: Option<EntityType>,
+        status: Option<EntityStatus>,
+        limit: Option<u32>,
+        offset: Option<u32>,
+    ) -> EdtResult<Vec<Entity>> {
+        state.entity_manager
+            .list(entity_type, status, limit, offset)
+            .await
+    }
+    
+    #[tauri::command]
+    pub async fn get_linked_entities(
+        state: State<'_, AppState>,
+        entity_id: String,
+        link_type: Option<LinkType>,
+    ) -> EdtResult<Vec<LinkedEntity>> {
+        state.link_manager
+            .get_linked(&entity_id.parse()?, link_type)
+            .await
+    }
+    
+    #[tauri::command]
+    pub async fn search_entities(
+        state: State<'_, AppState>,
+        query: String,
+    ) -> EdtResult<Vec<Entity>> {
+        state.cache_manager.search(&query).await
+    }
+    
+    #[tauri::command]
+    pub async fn get_dashboard_data(
+        state: State<'_, AppState>,
+    ) -> EdtResult<DashboardData> {
+        state.dashboard_service.get_data().await
+    }
+}
+
+// Command operations (writes)
+pub mod commands {
+    use super::*;
+    
+    #[tauri::command]
+    pub async fn create_entity(
+        state: State<'_, AppState>,
+        entity_type: EntityType,
+        data: serde_json::Value,
+    ) -> EdtResult<Entity> {
+        // 1. Validate data against schema
+        state.schema_registry.validate(&entity_type, &data)?;
+        
+        // 2. Create entity
+        let entity = state.entity_manager.create(entity_type, data).await?;
+        
+        // 3. Write RON file
+        state.ron_storage.write(&entity).await?;
+        
+        // 4. Update cache
+        state.cache_manager.add_entity(&entity).await?;
+        
+        // 5. Commit to Git
+        state.git_integration.commit(&format!(
+            "Created {} '{}'",
+            entity.metadata.entity_type,
+            entity.name()
+        )).await?;
+        
+        Ok(entity)
+    }
+    
+    #[tauri::command]
+    pub async fn update_entity(
+        state: State<'_, AppState>,
+        entity_id: String,
+        updates: serde_json::Value,
+    ) -> EdtResult<Entity> {
+        let id = entity_id.parse()?;
+        
+        // 1. Get current entity
+        let mut entity = state.entity_manager.get(&id).await?;
+        
+        // 2. Apply updates
+        entity.apply_updates(updates)?;
+        
+        // 3. Validate
+        state.schema_registry.validate_entity(&entity)?;
+        
+        // 4. Save state history (for undo/redo)
+        state.state_history.push(&entity).await?;
+        
+        // 5. Write RON file
+        state.ron_storage.write(&entity).await?;
+        
+        // 6. Update cache
+        state.cache_manager.update_entity(&entity).await?;
+        
+        // 7. Recalculate dependent entities
+        state.calculation_engine.recalculate_dependencies(&id).await?;
+        
+        // 8. Commit to Git
+        state.git_integration.commit(&format!(
+            "Updated {} '{}'",
+            entity.metadata.entity_type,
+            entity.name()
+        )).await?;
+        
+        Ok(entity)
+    }
+    
+    #[tauri::command]
+    pub async fn delete_entity(
+        state: State<'_, AppState>,
+        entity_id: String,
+    ) -> EdtResult<()> {
+        let id = entity_id.parse()?;
+        
+        // 1. Check for dependencies
+        let links = state.link_manager.get_linked(&id, None).await?;
+        if !links.is_empty() {
+            return Err(EdtError::HasDependencies(links.len()));
+        }
+        
+        // 2. Delete from cache
+        state.cache_manager.remove_entity(&id).await?;
+        
+        // 3. Delete RON file
+        state.ron_storage.delete(&id).await?;
+        
+        // 4. Commit to Git
+        state.git_integration.commit(&format!(
+            "Deleted entity {}",
+            entity_id
+        )).await?;
+        
+        Ok(())
+    }
+    
+    #[tauri::command]
+    pub async fn create_link(
+        state: State<'_, AppState>,
+        from_id: String,
+        to_id: String,
+        link_type: LinkType,
+        metadata: Option<LinkMetadata>,
+    ) -> EdtResult<Link> {
+        let from = from_id.parse()?;
+        let to = to_id.parse()?;
+        
+        // 1. Validate link is allowed by schema
+        state.schema_registry.validate_link(&from, &to, &link_type)?;
+        
+        // 2. Create link
+        let link = state.link_manager
+            .create(from, to, link_type, metadata)
+            .await?;
+        
+        // 3. Update cache
+        state.cache_manager.add_link(&link).await?;
+        
+        // 4. Update DAG
+        state.dag_manager.add_edge(&from, &to).await?;
+        
+        // 5. Commit to Git (links stored in entity files)
+        state.git_integration.commit(&format!(
+            "Created link {} -> {}",
+            from_id, to_id
+        )).await?;
+        
+        Ok(link)
+    }
+    
+    #[tauri::command]
+    pub async fn undo(
+        state: State<'_, AppState>,
+    ) -> EdtResult<Option<Entity>> {
+        state.state_history.undo().await
+    }
+    
+    #[tauri::command]
+    pub async fn redo(
+        state: State<'_, AppState>,
+    ) -> EdtResult<Option<Entity>> {
+        state.state_history.redo().await
+    }
+}
+
+// Calculation commands
+pub mod calculations {
+    use super::*;
+    
+    #[tauri::command]
+    pub async fn calculate_critical_path(
+        state: State<'_, AppState>,
+    ) -> EdtResult<CriticalPathResult> {
+        state.calculation_engine.critical_path().await
+    }
+    
+    #[tauri::command]
+    pub async fn calculate_mate_analysis(
+        state: State<'_, AppState>,
+        mate_id: String,
+    ) -> EdtResult<MateAnalysisResult> {
+        state.calculation_engine
+            .mate_analysis(&mate_id.parse()?)
+            .await
+    }
+    
+    #[tauri::command]
+    pub async fn calculate_stackup(
+        state: State<'_, AppState>,
+        stackup_id: String,
+        analysis_types: Vec<AnalysisType>,
+    ) -> EdtResult<StackupResults> {
+        state.calculation_engine
+            .stackup_analysis(&stackup_id.parse()?, analysis_types)
+            .await
+    }
+    
+    #[tauri::command]
+    pub async fn generate_bom(
+        state: State<'_, AppState>,
+        assembly_id: String,
+        volume: u32,
+    ) -> EdtResult<BomResult> {
+        state.calculation_engine
+            .generate_bom(&assembly_id.parse()?, volume)
+            .await
+    }
+    
+    #[tauri::command]
+    pub async fn calculate_evm(
+        state: State<'_, AppState>,
+    ) -> EdtResult<EvmMetrics> {
+        state.calculation_engine.evm_analysis().await
+    }
+}
+```
+
+### Error Handling
+
+```rust
+// src/core/error.rs
+
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum EdtError {
+    #[error("Entity not found: {0}")]
+    EntityNotFound(String),
+    
+    #[error("Invalid entity data: {0}")]
+    ValidationError(String),
+    
+    #[error("Entity has {0} dependencies and cannot be deleted")]
+    HasDependencies(usize),
+    
+    #[error("Link type not allowed between {0} and {1}")]
+    InvalidLink(String, String),
+    
+    #[error("Calculation failed: {0}")]
+    CalculationError(String),
+    
+    #[error("File system error: {0}")]
+    FileSystemError(#[from] std::io::Error),
+    
+    #[error("Git error: {0}")]
+    GitError(#[from] git2::Error),
+    
+    #[error("Database error: {0}")]
+    DatabaseError(#[from] sqlx::Error),
+    
+    #[error("RON parsing error: {0}")]
+    RonError(#[from] ron::Error),
+    
+    #[error("UUID parsing error: {0}")]
+    UuidError(#[from] uuid::Error),
+}
+
+pub type EdtResult<T> = Result<T, EdtError>;
+```
+
+## Core Services Implementation
+
+### EntityManager
+
+```rust
+// src/core/entity_manager.rs
+
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+pub struct EntityManager {
+    storage: Arc<RonStorage>,
+    cache: Arc<CacheManager>,
+    schema: Arc<SchemaRegistry>,
+}
+
+impl EntityManager {
+    pub async fn create(
+        &self,
+        entity_type: EntityType,
+        data: serde_json::Value,
+    ) -> EdtResult<Entity> {
+        // Generate metadata
+        let metadata = EntityMetadata {
+            id: Uuid::new_v4(),
+            entity_type,
+            schema_version: self.schema.current_version(&entity_type),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            status: EntityStatus::Draft,
+        };
+        
+        // Construct entity from type and data
+        let entity = Entity::from_data(metadata, data)?;
+        
+        // Validate against schema
+        self.schema.validate_entity(&entity)?;
+        
+        Ok(entity)
+    }
+    
+    pub async fn get(&self, id: &Uuid) -> EdtResult<Entity> {
+        // Try cache first
+        if let Some(entity) = self.cache.get_entity(id).await? {
+            return Ok(entity);
+        }
+        
+        // Fall back to file system
+        let entity = self.storage.read(id).await?;
+        
+        // Update cache
+        self.cache.add_entity(&entity).await?;
+        
+        Ok(entity)
+    }
+    
+    pub async fn list(
+        &self,
+        entity_type: Option<EntityType>,
+        status: Option<EntityStatus>,
+        limit: Option<u32>,
+        offset: Option<u32>,
+    ) -> EdtResult<Vec<Entity>> {
+        self.cache.query_entities(entity_type, status, limit, offset).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[tokio::test]
+    async fn test_create_task() {
+        let manager = setup_test_manager().await;
+        
+        let task_data = json!({
+            "name": "Test Task",
+            "description": "A test task",
+            "scheduled_start": "2025-01-01T09:00:00Z",
+            "deadline": "2025-01-05T17:00:00Z",
+            "task_type": "EffortDriven",
+        });
+        
+        let entity = manager
+            .create(EntityType::Task, task_data)
+            .await
+            .unwrap();
+        
+        assert_eq!(entity.name(), "Test Task");
+        assert_eq!(entity.metadata.entity_type, EntityType::Task);
+    }
+    
+    #[tokio::test]
+    async fn test_validation_error() {
+        let manager = setup_test_manager().await;
+        
+        let invalid_data = json!({
+            "name": "Test",
+            // Missing required fields
+        });
+        
+        let result = manager.create(EntityType::Task, invalid_data).await;
+        assert!(result.is_err());
+    }
+}
+```
+
+### LinkManager
+
+```rust
+// src/core/link_manager.rs
+
+pub struct LinkManager {
+    cache: Arc<CacheManager>,
+    dag: Arc<RwLock<DiGraph<Uuid, LinkType>>>,
+    schema: Arc<SchemaRegistry>,
+}
+
+impl LinkManager {
+    pub async fn create(
+        &self,
+        from: Uuid,
+        to: Uuid,
+        link_type: LinkType,
+        metadata: Option<LinkMetadata>,
+    ) -> EdtResult<Link> {
+        // Validate link
+        self.schema.validate_link(&from, &to, &link_type)?;
+        
+        // Check for cycles if directional
+        if self.would_create_cycle(&from, &to).await? {
+            return Err(EdtError::ValidationError(
+                "Link would create cycle".into()
+            ));
+        }
+        
+        let link = Link {
+            id: Uuid::new_v4(),
+            from_entity_id: from,
+            from_entity_type: self.get_entity_type(&from).await?,
+            to_entity_id: to,
+            to_entity_type: self.get_entity_type(&to).await?,
+            link_type,
+            metadata,
+            created_at: Utc::now(),
+        };
+        
+        // Add to DAG
+        let mut dag = self.dag.write().await;
+        dag.add_edge(
+            self.get_or_add_node(&mut dag, from),
+            self.get_or_add_node(&mut dag, to),
+            link_type.clone(),
+        );
+        
+        Ok(link)
+    }
+    
+    pub async fn get_linked(
+        &self,
+        entity_id: &Uuid,
+        link_type: Option<LinkType>,
+    ) -> EdtResult<Vec<LinkedEntity>> {
+        self.cache.get_linked_entities(entity_id, link_type).await
+    }
+    
+    pub async fn get_impact_analysis(
+        &self,
+        entity_id: &Uuid,
+    ) -> EdtResult<Vec<Uuid>> {
+        // Get all entities reachable from this entity
+        let dag = self.dag.read().await;
+        let node = self.find_node(&dag, entity_id)?;
+        
+        let mut visited = HashSet::new();
+        let mut stack = vec![node];
+        
+        while let Some(current) = stack.pop() {
+            if visited.insert(current) {
+                for neighbor in dag.neighbors(current) {
+                    stack.push(neighbor);
+                }
+            }
+        }
+        
+        Ok(visited.into_iter()
+            .map(|n| *dag[n])
+            .collect())
+    }
+    
+    async fn would_create_cycle(&self, from: &Uuid, to: &Uuid) -> EdtResult<bool> {
+        let dag = self.dag.read().await;
+        
+        // Check if there's already a path from 'to' to 'from'
+        let from_node = self.find_node(&dag, from)?;
+        let to_node = self.find_node(&dag, to)?;
+        
+        Ok(petgraph::algo::has_path_connecting(
+            &*dag,
+            to_node,
+            from_node,
+            None,
+        ))
+    }
+}
+```
+
+### CalculationEngine
+
+```rust
+// src/core/calculation_engine.rs
+
+pub struct CalculationEngine {
+    entity_manager: Arc<EntityManager>,
+    link_manager: Arc<LinkManager>,
+    cache: Arc<CacheManager>,
+}
+
+impl CalculationEngine {
+    // Critical Path Method
+    pub async fn critical_path(&self) -> EdtResult<CriticalPathResult> {
+        // 1. Get all tasks and milestones
+        let tasks = self.entity_manager
+            .list(Some(EntityType::Task), None, None, None)
+            .await?;
+        
+        let milestones = self.entity_manager
+            .list(Some(EntityType::Milestone), None, None, None)
+            .await?;
+        
+        // 2. Build dependency graph
+        let mut graph: DiGraph<Uuid, ()> = DiGraph::new();
+        let mut node_map = HashMap::new();
+        
+        for task in &tasks {
+            let node = graph.add_node(task.id());
+            node_map.insert(task.id(), node);
+        }
+        
+        // Add edges for dependencies
+        for task in &tasks {
+            if let Some(task_data) = task.as_task() {
+                for dep in &task_data.dependencies {
+                    if let (Some(&from), Some(&to)) = (
+                        node_map.get(&dep.predecessor_id),
+                        node_map.get(&task.id()),
+                    ) {
+                        graph.add_edge(from, to, ());
+                    }
+                }
+            }
+        }
+        
+        // 3. Topological sort
+        let sorted = petgraph::algo::toposort(&graph, None)
+            .map_err(|_| EdtError::CalculationError("Cycle detected in task dependencies".into()))?;
+        
+        // 4. Forward pass (earliest start/finish)
+        let mut earliest_start = HashMap::new();
+        let mut earliest_finish = HashMap::new();
+        
+        for node in &sorted {
+            let task_id = graph[*node];
+            let task = self.entity_manager.get(&task_id).await?;
+            let duration = task.duration_days();
+            
+            // Calculate earliest start
+            let es = graph.edges_directed(*node, Direction::Incoming)
+                .map(|edge| earliest_finish[&edge.source()])
+                .max()
+                .unwrap_or(0.0);
+            
+            earliest_start.insert(*node, es);
+            earliest_finish.insert(*node, es + duration);
+        }
+        
+        // 5. Backward pass (latest start/finish)
+        let mut latest_start = HashMap::new();
+        let mut latest_finish = HashMap::new();
+        
+        // Project end = max earliest finish
+        let project_end = earliest_finish.values()
+            .copied()
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap_or(0.0);
+        
+        for node in sorted.iter().rev() {
+            let task_id = graph[*node];
+            let task = self.entity_manager.get(&task_id).await?;
+            let duration = task.duration_days();
+            
+            // Calculate latest finish
+            let lf = graph.edges_directed(*node, Direction::Outgoing)
+                .map(|edge| latest_start[&edge.target()])
+                .min()
+                .unwrap_or(project_end);
+            
+            latest_finish.insert(*node, lf);
+            latest_start.insert(*node, lf - duration);
+        }
+        
+        // 6. Calculate slack and identify critical path
+        let mut critical_tasks = Vec::new();
+        let mut task_slacks = HashMap::new();
+        
+        for node in &sorted {
+            let slack = latest_start[node] - earliest_start[node];
+            task_slacks.insert(graph[*node], slack);
+            
+            if slack.abs() < 0.001 {  // Nearly zero (critical)
+                critical_tasks.push(graph[*node]);
+            }
+        }
+        
+        // 7. Update task entities with results
+        for (task_id, slack) in &task_slacks {
+            let mut task = self.entity_manager.get(task_id).await?;
+            task.set_slack(*slack);
+            task.set_critical_path(slack.abs() < 0.001);
+            self.entity_manager.update(task).await?;
+        }
+        
+        Ok(CriticalPathResult {
+            project_duration: project_end,
+            critical_path: critical_tasks,
+            task_slacks,
+        })
+    }
+    
+    // Tolerance Analysis - Worst Case
+    pub async fn stackup_worst_case(
+        &self,
+        stackup_id: &Uuid,
+    ) -> EdtResult<StackupResult> {
+        let stackup = self.entity_manager.get(stackup_id).await?;
+        let features = self.get_stackup_features(stackup_id).await?;
+        
+        let mut upper_sum = 0.0;
+        let mut lower_sum = 0.0;
+        
+        for (feature, contribution) in features {
+            let range = feature.upper_tolerance - feature.lower_tolerance;
+            let adjusted_range = range * contribution.contribution;
+            
+            match contribution.sign {
+                ContributionSign::Positive => {
+                    upper_sum += adjusted_range / 2.0;
+                    lower_sum -= adjusted_range / 2.0;
+                }
+                ContributionSign::Negative => {
+                    upper_sum -= adjusted_range / 2.0;
+                    lower_sum += adjusted_range / 2.0;
+                }
+            }
+        }
+        
+        let mean = (upper_sum + lower_sum) / 2.0;
+        
+        Ok(StackupResult {
+            mean,
+            upper: upper_sum,
+            lower: lower_sum,
+        })
+    }
+    
+    // Tolerance Analysis - RSS
+    pub async fn stackup_rss(
+        &self,
+        stackup_id: &Uuid,
+    ) -> EdtResult<StackupResult> {
+        let features = self.get_stackup_features(stackup_id).await?;
+        
+        let mut variance_sum = 0.0;
+        
+        for (feature, contribution) in features {
+            let std_dev = (feature.upper_tolerance - feature.lower_tolerance) / 6.0; // 3-sigma
+            let variance = std_dev.powi(2);
+            variance_sum += variance * contribution.contribution.powi(2);
+        }
+        
+        let combined_std_dev = variance_sum.sqrt();
+        let mean = 0.0; // Assumes nominal dimensions sum to zero
+        
+        Ok(StackupResult {
+            mean,
+            upper: mean + 3.0 * combined_std_dev,
+            lower: mean - 3.0 * combined_std_dev,
+        })
+    }
+    
+    // Tolerance Analysis - Monte Carlo
+    pub async fn stackup_monte_carlo(
+        &self,
+        stackup_id: &Uuid,
+        num_samples: usize,
+    ) -> EdtResult<MonteCarloResult> {
+        use rand::distributions::Distribution;
+        use statrs::statistics::Statistics;
+        
+        let stackup = self.entity_manager.get(stackup_id).await?;
+        let features = self.get_stackup_features(stackup_id).await?;
+        
+        let mut rng = rand::thread_rng();
+        let mut samples = Vec::with_capacity(num_samples);
+        
+        // Run Monte Carlo simulation
+        for _ in 0..num_samples {
+            let mut sum = 0.0;
+            
+            for (feature, contribution) in &features {
+                // Generate random value based on distribution type
+                let value = match feature.distribution_type {
+                    DistributionType::Normal => {
+                        let mean = feature.custom_mean
+                            .unwrap_or(feature.nominal);
+                        let std_dev = feature.custom_std_dev
+                            .unwrap_or((feature.upper_tolerance - feature.lower_tolerance) / 6.0);
+                        
+                        let normal = statrs::distribution::Normal::new(mean, std_dev)
+                            .map_err(|e| EdtError::CalculationError(e.to_string()))?;
+                        normal.sample(&mut rng)
+                    }
+                    DistributionType::Uniform => {
+                        let uniform = rand::distributions::Uniform::new(
+                            feature.lower_tolerance,
+                            feature.upper_tolerance,
+                        );
+                        uniform.sample(&mut rng)
+                    }
+                    DistributionType::Triangular => {
+                        // Simplified triangular distribution
+                        let u = rand::random::<f64>();
+                        if u < 0.5 {
+                            feature.lower_tolerance + 
+                                (2.0 * u * (feature.nominal - feature.lower_tolerance)).sqrt()
+                        } else {
+                            feature.upper_tolerance - 
+                                (2.0 * (1.0 - u) * (feature.upper_tolerance - feature.nominal)).sqrt()
+                        }
+                    }
+                };
+                
+                let contribution_value = value * contribution.contribution;
+                sum += match contribution.sign {
+                    ContributionSign::Positive => contribution_value,
+                    ContributionSign::Negative => -contribution_value,
+                };
+            }
+            
+            samples.push(sum);
+        }
+        
+        // Calculate statistics
+        let mean = samples.mean();
+        let std_dev = samples.std_dev();
+        samples.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let median = samples[samples.len() / 2];
+        
+        // Process capability (if spec limits provided)
+        let (cp, cpk, ppm_failures) = if let (Some(usl), Some(lsl)) = 
+            (stackup.upper_spec_limit, stackup.lower_spec_limit) {
+            
+            let cp = (usl - lsl) / (6.0 * std_dev);
+            let cpk = ((usl - mean) / (3.0 * std_dev))
+                .min((mean - lsl) / (3.0 * std_dev));
+            
+            // Calculate PPM failures
+            let failures = samples.iter()
+                .filter(|&&v| v < lsl || v > usl)
+                .count();
+            let ppm = (failures as f64 / num_samples as f64) * 1_000_000.0;
+            
+            (Some(cp), Some(cpk), Some(ppm))
+        } else {
+            (None, None, None)
+        };
+        
+        Ok(MonteCarloResult {
+            mean,
+            median,
+            std_dev,
+            upper: samples[((num_samples as f64 * 0.9987).round() as usize).min(num_samples - 1)],
+            lower: samples[(num_samples as f64 * 0.0013).round() as usize],
+            cp,
+            cpk,
+            ppm_failures,
+        })
+    }
+    
+    // BOM Generation with Cost Interpolation
+    pub async fn generate_bom(
+        &self,
+        assembly_id: &Uuid,
+        volume: u32,
+    ) -> EdtResult<BomResult> {
+        let assembly = self.entity_manager.get(assembly_id).await?;
+        let components = self.get_assembly_components(assembly_id).await?;
+        
+        let mut bom_items = Vec::new();
+        let mut total_cost = 0.0;
+        let mut has_interpolated = false;
+        
+        for (component, quantity) in components {
+            // Get quotes for this component
+            let quotes = self.get_component_quotes(&component.id()).await?;
+            
+            let cost_per_unit = if let Some(cost) = self.interpolate_cost(&quotes, volume)? {
+                has_interpolated |= cost.is_interpolated;
+                cost.cost_per_unit
+            } else {
+                continue; // Skip if no cost data
+            };
+            
+            let line_total = cost_per_unit * quantity as f64;
+            total_cost += line_total;
+            
+            bom_items.push(BomItem {
+                component_id: component.id(),
+                part_number: component.part_number.clone(),
+                description: component.description.clone(),
+                revision: component.revision.clone(),
+                quantity,
+                cost_per_unit,
+                line_total,
+            });
+        }
+        
+        Ok(BomResult {
+            assembly_id: *assembly_id,
+            volume,
+            items: bom_items,
+            total_cost,
+            has_interpolated_costs: has_interpolated,
+        })
+    }
+    
+    fn interpolate_cost(
+        &self,
+        quotes: &[Quote],
+        volume: u32,
+    ) -> EdtResult<Option<CostEstimate>> {
+        // Get all non-expired quotes with same distribution
+        let valid_quotes: Vec<_> = quotes.iter()
+            .filter(|q| {
+                q.expiration_date.map_or(true, |exp| exp >= chrono::Local::now().date_naive())
+            })
+            .collect();
+        
+        if valid_quotes.is_empty() {
+            return Ok(None);
+        }
+        
+        // Collect all quantity-price pairs
+        let mut points: Vec<(f64, f64)> = valid_quotes.iter()
+            .flat_map(|q| q.quantity_price_pairs.iter())
+            .map(|(qty, price)| (*qty as f64, *price))
+            .collect();
+        
+        points.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        
+        // Check if we have exact match
+        if let Some((_, price)) = points.iter().find(|(qty, _)| *qty as u32 == volume) {
+            return Ok(Some(CostEstimate {
+                cost_per_unit: *price,
+                is_interpolated: false,
+                r_squared: None,
+            }));
+        }
+        
+        // Interpolate based on distribution type
+        let dist_type = valid_quotes[0].distribution_type;
+        let cost = self.fit_curve(&points, volume as f64, &dist_type)?;
+        
+        Ok(Some(cost))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[tokio::test]
+    async fn test_worst_case_analysis() {
+        let engine = setup_test_engine().await;
+        
+        // Create test stackup with features
+        let stackup_id = create_test_stackup(&engine).await;
+        
+        let result = engine.stackup_worst_case(&stackup_id).await.unwrap();
+        
+        assert!(result.upper > result.mean);
+        assert!(result.lower < result.mean);
+    }
+    
+    #[tokio::test]
+    async fn test_monte_carlo_analysis() {
+        let engine = setup_test_engine().await;
+        let stackup_id = create_test_stackup(&engine).await;
+        
+        let result = engine
+            .stackup_monte_carlo(&stackup_id, 10000)
+            .await
+            .unwrap();
+        
+        assert!(result.mean.abs() < 0.1); // Should be near zero
+        assert!(result.std_dev > 0.0);
+        assert!(result.cp.is_some());
+    }
+}
+```
+
+## Frontend Architecture
+
+### State Management (Zustand)
+
+```typescript
+// src/stores/entityStore.ts
+
+import { create } from 'zustand';
+import { invoke } from '@tauri-apps/api/tauri';
+
+interface EntityStore {
+  entities: Entity[];
+  selectedEntity: Entity | null;
+  loading: boolean;
+  error: string | null;
+  
+  // Actions
+  fetchEntities: (type?: EntityType) => Promise<void>;
+  createEntity: (type: EntityType, data: any) => Promise<Entity>;
+  updateEntity: (id: string, updates: any) => Promise<Entity>;
+  deleteEntity: (id: string) => Promise<void>;
+  selectEntity: (id: string) => void;
+  
+  // Undo/Redo
+  undo: () => Promise<void>;
+  redo: () => Promise<void>;
+}
+
+export const useEntityStore = create<EntityStore>((set, get) => ({
+  entities: [],
+  selectedEntity: null,
+  loading: false,
+  error: null,
+  
+  fetchEntities: async (type) => {
+    set({ loading: true, error: null });
+    try {
+      const entities = await invoke<Entity[]>('list_entities', {
+        entityType: type,
+      });
+      set({ entities, loading: false });
+    } catch (error) {
+      set({ error: error.message, loading: false });
+    }
+  },
+  
+  createEntity: async (type, data) => {
+    set({ loading: true, error: null });
+    try {
+      const entity = await invoke<Entity>('create_entity', {
+        entityType: type,
+        data,
+      });
+      set((state) => ({
+        entities: [...state.entities, entity],
+        loading: false,
+      }));
+      return entity;
+    } catch (error) {
+      set({ error: error.message, loading: false });
+      throw error;
+    }
+  },
+  
+  updateEntity: async (id, updates) => {
+    set({ loading: true, error: null });
+    try {
+      const entity = await invoke<Entity>('update_entity', {
+        entityId: id,
+        updates,
+      });
+      set((state) => ({
+        entities: state.entities.map((e) =>
+          e.metadata.id === id ? entity : e
+        ),
+        selectedEntity: state.selectedEntity?.metadata.id === id 
+          ? entity 
+          : state.selectedEntity,
+        loading: false,
+      }));
+      return entity;
+    } catch (error) {
+      set({ error: error.message, loading: false });
+      throw error;
+    }
+  },
+  
+  deleteEntity: async (id) => {
+    set({ loading: true, error: null });
+    try {
+      await invoke('delete_entity', { entityId: id });
+      set((state) => ({
+        entities: state.entities.filter((e) => e.metadata.id !== id),
+        selectedEntity: state.selectedEntity?.metadata.id === id 
+          ? null 
+          : state.selectedEntity,
+        loading: false,
+      }));
+    } catch (error) {
+      set({ error: error.message, loading: false });
+      throw error;
+    }
+  },
+  
+  selectEntity: (id) => {
+    const entity = get().entities.find((e) => e.metadata.id === id);
+    set({ selectedEntity: entity || null });
+  },
+  
+  undo: async () => {
+    const entity = await invoke<Entity | null>('undo');
+    if (entity) {
+      set((state) => ({
+        entities: state.entities.map((e) =>
+          e.metadata.id === entity.metadata.id ? entity : e
+        ),
+      }));
+    }
+  },
+  
+  redo: async () => {
+    const entity = await invoke<Entity | null>('redo');
+    if (entity) {
+      set((state) => ({
+        entities: state.entities.map((e) =>
+          e.metadata.id === entity.metadata.id ? entity : e
+        ),
+      }));
+    }
+  },
+}));
+```
+
+### Schema-Driven Forms
+
+```typescript
+// src/components/EntityForm.tsx
+
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+
+// Generate Zod schema from entity schema
+const generateSchema = (entityType: EntityType) => {
+  // Fetch schema from backend
+  const schema = useQuery(['schema', entityType], () =>
+    invoke<EntitySchema>('get_schema', { entityType })
+  );
+  
+  // Convert to Zod schema
+  return buildZodSchema(schema.data);
+};
+
+const EntityForm = ({ entityType, initialData, onSubmit }) => {
+  const schema = generateSchema(entityType);
+  
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm({
+    resolver: zodResolver(schema),
+    defaultValues: initialData,
+  });
+  
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      {/* Dynamically render form fields based on schema */}
+      <FormFields schema={schema} register={register} errors={errors} />
+      
+      <button type="submit">Save</button>
+    </form>
+  );
+};
+```
+
+## Testing Strategy
+
+### Test Pyramid
+
+```
+        ╱╲
+       ╱  ╲       E2E Tests (5%)
+      ╱────╲      - Critical user journeys
+     ╱      ╲     - Full stack integration
+    ╱────────╲    
+   ╱          ╲   Integration Tests (25%)
+  ╱────────────╲  - API command tests
+ ╱              ╲ - Service integration
+╱────────────────╲
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔ Unit Tests (70%)
+                   - Core logic
+                   - Calculations
+                   - Utilities
+```
+
+### Unit Tests (TDD Approach)
+
+```rust
+// src/core/entity_manager_test.rs
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::*;
+    use tempfile::TempDir;
+    
+    #[fixture]
+    fn test_project() -> (TempDir, EntityManager) {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = EntityManager::new(temp_dir.path()).unwrap();
+        (temp_dir, manager)
+    }
+    
+    #[rstest]
+    #[tokio::test]
+    async fn test_create_entity_success(test_project: (TempDir, EntityManager)) {
+        let (_, manager) = test_project;
+        
+        let data = json!({
+            "name": "Test Task",
+            "description": "A test",
+            "scheduled_start": "2025-01-01T00:00:00Z",
+            "deadline": "2025-01-05T00:00:00Z",
+            "task_type": "EffortDriven",
+        });
+        
+        let result = manager.create(EntityType::Task, data).await;
+        
+        assert!(result.is_ok());
+        let entity = result.unwrap();
+        assert_eq!(entity.metadata.entity_type, EntityType::Task);
+        assert_eq!(entity.metadata.status, EntityStatus::Draft);
+    }
+    
+    #[rstest]
+    #[tokio::test]
+    async fn test_create_entity_validation_failure(test_project: (TempDir, EntityManager)) {
+        let (_, manager) = test_project;
+        
+        let invalid_data = json!({
+            "name": "Test",
+            // Missing required fields
+        });
+        
+        let result = manager.create(EntityType::Task, invalid_data).await;
+        
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), EdtError::ValidationError(_)));
+    }
+    
+    #[rstest]
+    #[tokio::test]
+    async fn test_get_nonexistent_entity(test_project: (TempDir, EntityManager)) {
+        let (_, manager) = test_project;
+        
+        let fake_id = Uuid::new_v4();
+        let result = manager.get(&fake_id).await;
+        
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), EdtError::EntityNotFound(_)));
+    }
+}
+```
+
+### Integration Tests
+
+```rust
+// tests/api_integration_test.rs
+
+#[tokio::test]
+async fn test_full_entity_lifecycle() {
+    // Setup
+    let app = setup_test_app().await;
+    
+    // Create
+    let create_result: Entity = app.invoke(
+        "create_entity",
+        json!({
+            "entity_type": "Task",
+            "data": {
+                "name": "Integration Test Task",
+                "description": "Testing full lifecycle",
+                "scheduled_start": "2025-01-01T00:00:00Z",
+                "deadline": "2025-01-05T00:00:00Z",
+                "task_type": "EffortDriven",
+            }
+        })
+    ).await;
+    
+    assert_eq!(create_result.name(), "Integration Test Task");
+    let entity_id = create_result.id();
+    
+    // Read
+    let get_result: Entity = app.invoke(
+        "get_entity",
+        json!({ "entity_id": entity_id.to_string() })
+    ).await;
+    
+    assert_eq!(get_result.id(), entity_id);
+    
+    // Update
+    let update_result: Entity = app.invoke(
+        "update_entity",
+        json!({
+            "entity_id": entity_id.to_string(),
+            "updates": {
+                "name": "Updated Task Name"
+            }
+        })
+    ).await;
+    
+    assert_eq!(update_result.name(), "Updated Task Name");
+    
+    // Verify Git commit
+    let repo = app.git_repo();
+    let last_commit = repo.head().unwrap().peel_to_commit().unwrap();
+    assert!(last_commit.message().unwrap().contains("Updated"));
+    
+    // Delete
+    app.invoke::<()>(
+        "delete_entity",
+        json!({ "entity_id": entity_id.to_string() })
+    ).await;
+    
+    // Verify deletion
+    let get_after_delete = app.invoke::<Entity>(
+        "get_entity",
+        json!({ "entity_id": entity_id.to_string() })
+    ).await;
+    
+    assert!(get_after_delete.is_err());
+}
+
+#[tokio::test]
+async fn test_link_creation_and_impact_analysis() {
+    let app = setup_test_app().await;
+    
+    // Create requirement
+    let req = create_test_requirement(&app).await;
+    
+    // Create component
+    let component = create_test_component(&app).await;
+    
+    // Link them
+    let link: Link = app.invoke(
+        "create_link",
+        json!({
+            "from_id": component.id().to_string(),
+            "to_id": req.id().to_string(),
+            "link_type": "Satisfies",
+        })
+    ).await;
+    
+    assert_eq!(link.link_type, LinkType::Satisfies);
+    
+    // Get impact analysis
+    let impact: Vec<Uuid> = app.invoke(
+        "get_impact_analysis",
+        json!({ "entity_id": req.id().to_string() })
+    ).await;
+    
+    assert!(impact.contains(&component.id()));
+}
+```
+
+### Calculation Tests
+
+```rust
+// src/core/calculation_engine_test.rs
+
+#[tokio::test]
+async fn test_critical_path_simple_chain() {
+    let engine = setup_test_engine().await;
+    
+    // Create task chain: A -> B -> C
+    let task_a = create_task(&engine, "A", 5.0, vec![]).await;
+    let task_b = create_task(&engine, "B", 3.0, vec![task_a.id()]).await;
+    let task_c = create_task(&engine, "C", 4.0, vec![task_b.id()]).await;
+    
+    let result = engine.critical_path().await.unwrap();
+    
+    assert_eq!(result.project_duration, 12.0);
+    assert_eq!(result.critical_path.len(), 3);
+    assert!(result.critical_path.contains(&task_a.id()));
+    assert!(result.critical_path.contains(&task_b.id()));
+    assert!(result.critical_path.contains(&task_c.id()));
+}
+
+#[tokio::test]
+async fn test_critical_path_with_slack() {
+    let engine = setup_test_engine().await;
+    
+    // Create diamond pattern
+    //     B(2)
+    //   /      \
+    // A(1)      D(1)
+    //   \      /
+    //     C(5)
+    
+    let task_a = create_task(&engine, "A", 1.0, vec![]).await;
+    let task_b = create_task(&engine, "B", 2.0, vec![task_a.id()]).await;
+    let task_c = create_task(&engine, "C", 5.0, vec![task_a.id()]).await;
+    let task_d = create_task(&engine, "D", 1.0, vec![
+        task_b.id(),
+        task_c.id(),
+    ]).await;
+    
+    let result = engine.critical_path().await.unwrap();
+    
+    // Critical path: A -> C -> D = 7 days
+    assert_eq!(result.project_duration, 7.0);
+    assert!(result.critical_path.contains(&task_a.id()));
+    assert!(result.critical_path.contains(&task_c.id()));
+    assert!(result.critical_path.contains(&task_d.id()));
+    assert!(!result.critical_path.contains(&task_b.id()));
+    
+    // Task B should have slack
+    let task_b_slack = result.task_slacks.get(&task_b.id()).unwrap();
+    assert!(task_b_slack > &2.9 && task_b_slack < &3.1); // ~3 days slack
+}
+
+#[tokio::test]
+async fn test_tolerance_worst_case() {
+    let engine = setup_test_engine().await;
+    
+    // Create stackup with two features
+    let feature1 = create_feature(&engine, 10.0, 0.1, -0.1).await;
+    let feature2 = create_feature(&engine, 5.0, 0.05, -0.05).await;
+    
+    let stackup = create_stackup(
+        &engine,
+        vec![
+            (feature1.id(), ContributionSign::Positive, 1.0),
+            (feature2.id(), ContributionSign::Negative, 1.0),
+        ],
+    ).await;
+    
+    let result = engine
+        .stackup_worst_case(&stackup.id())
+        .await
+        .unwrap();
+    
+    // Worst case range = 0.2 + 0.1 = 0.3
+    assert!((result.upper - result.lower - 0.3).abs() < 0.001);
+}
+
+#[tokio::test]
+async fn test_monte_carlo_normal_distribution() {
+    let engine = setup_test_engine().await;
+    
+    let feature = create_feature_with_distribution(
+        &engine,
+        10.0,
+        0.1,
+        -0.1,
+        DistributionType::Normal,
+    ).await;
+    
+    let stackup = create_stackup(
+        &engine,
+        vec![(feature.id(), ContributionSign::Positive, 1.0)],
+    ).await;
+    
+    // Set spec limits
+    engine.set_stackup_limits(&stackup.id(), 10.3, 9.7).await;
+    
+    let result = engine
+        .stackup_monte_carlo(&stackup.id(), 10000)
+        .await
+        .unwrap();
+    
+    // Mean should be near 10.0
+    assert!((result.mean - 10.0).abs() < 0.05);
+    
+    // Should have Cp and Cpk
+    assert!(result.cp.is_some());
+    assert!(result.cpk.is_some());
+    
+    // PPM failures should be very low for 3-sigma
+    assert!(result.ppm_failures.unwrap() < 1000.0);
+}
+```
+
+### Frontend Tests (Vitest)
+
+```typescript
+// src/components/__tests__/EntityList.test.tsx
+
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { EntityList } from '../EntityList';
+import { mockInvoke } from '@tauri-apps/api/mocks';
+
+vi.mock('@tauri-apps/api/tauri');
+
+describe('EntityList', () => {
+  it('renders entities from backend', async () => {
+    const mockEntities = [
+      {
+        metadata: {
+          id: '123',
+          entity_type: 'Task',
+          status: 'Draft',
+        },
+        name: 'Test Task',
+        description: 'A test task',
+      },
+    ];
+    
+    mockInvoke.mockResolvedValue(mockEntities);
+    
+    render(<EntityList entityType="Task" />);
+    
+    await waitFor(() => {
+      expect(screen.getByText('Test Task')).toBeInTheDocument();
+    });
+  });
+  
+  it('handles create entity', async () => {
+    const user = userEvent.setup();
+    
+    render(<EntityList entityType="Task" />);
+    
+    const createButton = screen.getByRole('button', { name: /create/i });
+    await user.click(createButton);
+    
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+  
+  it('filters entities by status', async () => {
+    const user = userEvent.setup();
+    
+    const mockEntities = [
+      { metadata: { status: 'Draft' }, name: 'Draft Task' },
+      { metadata: { status: 'Released' }, name: 'Released Task' },
+    ];
+    
+    mockInvoke.mockResolvedValue(mockEntities);
+    
+    render(<EntityList entityType="Task" />);
+    
+    const statusFilter = screen.getByLabelText(/status/i);
+    await user.selectOptions(statusFilter, 'Draft');
+    
+    await waitFor(() => {
+      expect(screen.getByText('Draft Task')).toBeInTheDocument();
+      expect(screen.queryByText('Released Task')).not.toBeInTheDocument();
+    });
+  });
+});
+```
+
+## Implementation Phases
+
+### Phase 1: Foundation (Weeks 1-4)
+
+**Goal**: Core infrastructure and one working module
+
+1. **Project Setup**
+   - Initialize Rust workspace
+   - Setup Tauri project
+   - Configure frontend build
+   - Setup testing frameworks
+   - CI/CD pipeline
+
+2. **Core Data Structures**
+   - Define all entity types in Rust
+   - Implement RON serialization
+   - Create schema registry
+   - Write validation logic
+
+3. **Storage Layer**
+   - RONStorage implementation
+   - File I/O with atomic operations
+   - Git integration basics (init, commit)
+   - Basic SQLite cache
+
+4. **API Foundation**
+   - Tauri command structure
+   - Error handling
+   - AppState setup
+   - Basic CRUD commands
+
+5. **Basic GUI**
+   - Tauri app shell
+   - Simple entity list view
+   - Create/edit form stub
+   - Router setup
+
+**Tests**: 50+ unit tests for core logic
+
+### Phase 2: Project Management Module (Weeks 5-8)
+
+**Goal**: Complete project management with calculations
+
+1. **Entities**
+   - Task CRUD operations
+   - Milestone CRUD
+   - Resource CRUD
+   - Calendar CRUD
+   - Dependencies
+
+2. **Calculations**
+   - Critical path algorithm
+   - Slack calculation
+   - EVM basics
+   - Task scheduling
+
+3. **GUI Components**
+   - Task list with filters
+   - Task detail view
+   - Dependency editor
+   - Gantt chart (simple)
+   - Resource assignment UI
+
+4. **Git Integration**
+   - Auto-commit on save
+   - Commit message generation
+
+**Tests**: 30+ integration tests, 20+ calculation tests
+
+### Phase 3: Links & Comments (Weeks 9-10)
+
+**Goal**: Entity relationships and collaboration
+
+1. **Link System**
+   - Link creation/deletion
+   - Bidirectional links
+   - Link validation
+   - Impact analysis
+   - DAG management
+
+2. **Comments**
+   - Comment entity
+   - Threading
+   - Tagging
+   - Seen/unseen tracking
+
+3. **GUI**
+   - Link editor
+   - Impact view
+   - Comment threads
+   - Tag autocomplete
+
+**Tests**: 25+ link tests, 15+ comment tests
+
+### Phase 4: Cache & Performance (Weeks 11-12)
+
+**Goal**: Fast queries and incremental updates
+
+1. **Cache Manager**
+   - Full cache rebuild
+   - Incremental updates
+   - Hash-based change detection
+   - Query optimization
+
+2. **Search**
+   - Full-text search (if Tantivy works well)
+   - Advanced filtering
+   - Favorites
+
+3. **User Preferences**
+   - Local cache
+   - Current user tracking
+   - Favorites persistence
+
+**Tests**: 20+ cache tests, 10+ search tests
+
+### Phase 5: Requirements Module (Weeks 13-15)
+
+**Goal**: Complete requirements management
+
+1. **Entities**
+   - Requirement CRUD
+   - Type system
+   - Hierarchy
+
+2. **Analysis**
+   - Gap analysis
+   - Coverage analysis
+   - Traceability matrix
+
+3. **GUI**
+   - Requirement list
+   - Hierarchy view
+   - Matrix visualization
+   - Coverage dashboard
+
+**Tests**: 25+ requirement tests
+
+### Phase 6: Risk Module (Weeks 16-18)
+
+**Goal**: Complete risk management (FMEA)
+
+1. **Entities**
+   - Hazard CRUD
+   - Risk CRUD
+   - Risk Control CRUD
+   - Risk scoring
+
+2. **Calculations**
+   - Risk matrix
+   - Residual risk
+
+3. **GUI**
+   - Risk register
+   - Risk matrix heatmap
+   - Control assignment
+   - Warnings
+
+**Tests**: 20+ risk tests
+
+### Phase 7: Design Module - Part 1 (Weeks 19-22)
+
+**Goal**: Assembly, Component, Feature, basic linking
+
+1. **Entities**
+   - Assembly CRUD
+   - Component CRUD
+   - Feature CRUD
+   - Supplier CRUD
+   - Quote CRUD
+
+2. **GUI**
+   - Design tree view
+   - Component detail
+   - Feature editor
+   - Quote manager
+
+**Tests**: 30+ design entity tests
+
+### Phase 8: Design Module - Part 2 (Weeks 23-26)
+
+**Goal**: Tolerance analysis and BOM
+
+1. **Entities**
+   - Mate CRUD
+   - Stackup CRUD
+
+2. **Calculations**
+   - MMC/LMC
+   - Worst case
+   - RSS
+   - Monte Carlo
+   - BOM generation
+   - Cost interpolation
+
+3. **GUI**
+   - Stackup editor
+   - Analysis results
+   - Histogram/waterfall plots
+   - BOM viewer
+   - Cost estimation
+
+**Tests**: 40+ tolerance tests, 20+ BOM tests
+
+### Phase 9: Verification, Validation, Manufacturing (Weeks 27-28)
+
+**Goal**: Stub modules for linking
+
+1. **Entities**
+   - Verification CRUD
+   - Validation CRUD
+   - Manufacturing CRUD
+
+2. **GUI**
+   - Simple list/detail views
+   - Link to other entities
+
+**Tests**: 15+ tests
+
+### Phase 10: Dashboard & Polish (Weeks 29-32)
+
+**Goal**: Complete user experience
+
+1. **Dashboard**
+   - Summary calculations
+   - Warning aggregation
+   - Unread comments
+   - Favorites
+   - Quick actions
+
+2. **Undo/Redo**
+   - State history
+   - Multi-level undo
+
+3. **Exports**
+   - Gantt chart
+   - BOM CSV
+   - Traceability matrix
+   - Report generation
+
+4. **Polish**
+   - Error messages
+   - Loading states
+   - Animations
+   - Keyboard shortcuts
+   - Documentation
+
+**Tests**: 20+ dashboard tests, 10+ export tests
+
+## Best Practices & Pitfalls
+
+### DO
+
+✅ **Write tests first** - TDD ensures clean interfaces
+✅ **Validate early** - Check entity data on every API call
+✅ **Use types heavily** - Let Rust's type system catch errors
+✅ **Keep functions small** - Single responsibility principle
+✅ **Document public APIs** - Future you will thank you
+✅ **Use existing crates** - Don't reinvent wheels
+✅ **Commit often** - Small, atomic commits
+✅ **Profile before optimizing** - Measure, don't guess
+✅ **Handle errors gracefully** - User-friendly error messages
+✅ **Keep schema evolution in mind** - Version everything
+
+### DON'T
+
+❌ **Don't skip validation** - Invalid data causes subtle bugs
+❌ **Don't ignore Git errors** - User loses data
+❌ **Don't cache everything** - Memory limits exist
+❌ **Don't block async operations** - Use tokio properly
+❌ **Don't hard-code entity types** - Use schema registry
+❌ **Don't forget bidirectional links** - Both directions must update
+❌ **Don't assume file writes succeed** - Always check
+❌ **Don't parallelize prematurely** - Add only when proven slow
+❌ **Don't couple modules tightly** - Keep clear boundaries
+❌ **Don't skip error handling** - Result types everywhere
+
+### Common Pitfalls
+
+**RON Serialization Issues**
+- Large nested structures can be slow
+- Use `#[serde(skip_serializing_if = "Option::is_none")]`
+- Test round-trip serialization
+
+**Git Repository Corruption**
+- Always use git2 properly
+- Handle concurrent access
+- Test auto-commit thoroughly
+
+**Cache Inconsistency**
+- Rebuild cache on schema version change
+- Verify hashes match
+- Provide manual rebuild option
+
+**Link Cycles**
+- Check for cycles before adding edges
+- Use petgraph's cycle detection
+- Provide clear error messages
+
+**Calculation Errors**
+- Validate input data
+- Handle division by zero
+- Check for NaN and infinity
+- Provide detailed error context
+
+**Frontend Performance**
+- Virtual scrolling for large lists
+- Debounce search inputs
+- Lazy load entity details
+- Memoize expensive computations
+
+## Conclusion
+
+This design provides a solid foundation for building EDT. The phased approach allows for incremental development and testing while maintaining flexibility for future expansion.
+
+**Key Success Factors:**
+1. Comprehensive test coverage from day one
+2. Schema-driven architecture for maintainability
+3. Leveraging existing, battle-tested crates
+4. Clear separation of concerns
+5. Git as the foundation for collaboration
+6. Incremental, testable implementation
+
+Start with Phase 1, get it solid, then move forward one phase at a time. Each phase should leave the project in a working, tested state.
+
+Good luck building EDT! 🚀
