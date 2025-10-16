@@ -7,11 +7,16 @@ use crate::models::{
     Milestone, Resource, TaskType, ResourceType, Calendar, Baseline,
     Assembly, Component, Feature, FeatureType, DistributionType,
     Mate, MateType, Stackup, AnalysisType, Supplier, Quote, CostDistribution,
+    Verification, Validation, TestStatus, TestPriority, TestStep,
+    Manufacturing, ProcessStatus, WorkInstructionStep,
 };
 use chrono::{Utc, NaiveDate};
 
 // Import specialized managers
-use crate::core::managers::{TaskManager, RequirementManager, RiskManager, DesignManager};
+use crate::core::managers::{
+    TaskManager, RequirementManager, RiskManager, DesignManager,
+    TestingManager, ManufacturingManager,
+};
 
 /// Facade for entity lifecycle (CRUD operations)
 /// Delegates to specialized managers for better modularity
@@ -20,6 +25,8 @@ pub struct EntityManager {
     requirement_manager: RequirementManager,
     risk_manager: RiskManager,
     design_manager: DesignManager,
+    testing_manager: TestingManager,
+    manufacturing_manager: ManufacturingManager,
 }
 
 impl EntityManager {
@@ -28,7 +35,9 @@ impl EntityManager {
             task_manager: TaskManager::new(Arc::clone(&storage)),
             requirement_manager: RequirementManager::new(Arc::clone(&storage)),
             risk_manager: RiskManager::new(Arc::clone(&storage)),
-            design_manager: DesignManager::new(storage),
+            design_manager: DesignManager::new(Arc::clone(&storage)),
+            testing_manager: TestingManager::new(Arc::clone(&storage)),
+            manufacturing_manager: ManufacturingManager::new(storage),
         }
     }
 
@@ -188,6 +197,10 @@ impl EntityManager {
         self.requirement_manager.delete_requirement(id)
     }
 
+    pub fn list_requirement_ids(&self) -> EdtResult<Vec<Uuid>> {
+        self.requirement_manager.list_requirement_ids()
+    }
+
     // ============================================================================
     // Risk Methods (delegate to RiskManager)
     // ============================================================================
@@ -209,6 +222,14 @@ impl EntityManager {
 
     pub fn update_risk(&self, risk: Risk) -> EdtResult<Risk> {
         self.risk_manager.update_risk(risk)
+    }
+
+    pub fn delete_risk(&self, id: &Uuid) -> EdtResult<()> {
+        self.risk_manager.delete_risk(id)
+    }
+
+    pub fn list_risk_ids(&self) -> EdtResult<Vec<Uuid>> {
+        self.risk_manager.list_risk_ids()
     }
 
     // ============================================================================
@@ -407,6 +428,121 @@ impl EntityManager {
 
     pub fn list_quote_ids(&self) -> EdtResult<Vec<Uuid>> {
         self.design_manager.list_quote_ids()
+    }
+
+    // ============================================================================
+    // Verification Methods (delegate to TestingManager)
+    // ============================================================================
+
+    pub fn create_verification(
+        &self,
+        name: String,
+        description: String,
+        test_type: String,
+        test_steps: Vec<TestStep>,
+        acceptance_criteria: Vec<String>,
+        priority: TestPriority,
+    ) -> EdtResult<Verification> {
+        self.testing_manager.create_verification(
+            name,
+            description,
+            test_type,
+            test_steps,
+            acceptance_criteria,
+            priority,
+        )
+    }
+
+    pub fn get_verification(&self, id: &Uuid) -> EdtResult<Verification> {
+        self.testing_manager.get_verification(id)
+    }
+
+    pub fn update_verification(&self, verification: Verification) -> EdtResult<Verification> {
+        self.testing_manager.update_verification(verification)
+    }
+
+    pub fn delete_verification(&self, id: &Uuid) -> EdtResult<()> {
+        self.testing_manager.delete_verification(id)
+    }
+
+    pub fn list_verification_ids(&self) -> EdtResult<Vec<Uuid>> {
+        self.testing_manager.list_verification_ids()
+    }
+
+    // ============================================================================
+    // Validation Methods (delegate to TestingManager)
+    // ============================================================================
+
+    pub fn create_validation(
+        &self,
+        name: String,
+        description: String,
+        validation_type: String,
+        participants: Vec<String>,
+        success_criteria: Vec<String>,
+        priority: TestPriority,
+    ) -> EdtResult<Validation> {
+        self.testing_manager.create_validation(
+            name,
+            description,
+            validation_type,
+            participants,
+            success_criteria,
+            priority,
+        )
+    }
+
+    pub fn get_validation(&self, id: &Uuid) -> EdtResult<Validation> {
+        self.testing_manager.get_validation(id)
+    }
+
+    pub fn update_validation(&self, validation: Validation) -> EdtResult<Validation> {
+        self.testing_manager.update_validation(validation)
+    }
+
+    pub fn delete_validation(&self, id: &Uuid) -> EdtResult<()> {
+        self.testing_manager.delete_validation(id)
+    }
+
+    pub fn list_validation_ids(&self) -> EdtResult<Vec<Uuid>> {
+        self.testing_manager.list_validation_ids()
+    }
+
+    // ============================================================================
+    // Manufacturing Methods (delegate to ManufacturingManager)
+    // ============================================================================
+
+    pub fn create_manufacturing(
+        &self,
+        name: String,
+        description: String,
+        process_type: String,
+        work_instructions: Vec<WorkInstructionStep>,
+        priority: u32,
+    ) -> EdtResult<Manufacturing> {
+        self.manufacturing_manager.create_manufacturing(
+            name,
+            description,
+            process_type,
+            work_instructions,
+            priority,
+        )
+    }
+
+    pub fn get_manufacturing(&self, id: &Uuid) -> EdtResult<Manufacturing> {
+        self.manufacturing_manager.get_manufacturing(id)
+    }
+
+    pub fn update_manufacturing(&self, manufacturing: Manufacturing) -> EdtResult<Manufacturing> {
+        self.manufacturing_manager.update_manufacturing(manufacturing)
+    }
+
+    pub fn delete_manufacturing(&self, id: &Uuid) -> EdtResult<()> {
+        self.manufacturing_manager.delete_manufacturing(id)
+    }
+
+    pub fn list_manufacturing_ids(&self) -> EdtResult<Vec<Uuid>> {
+        self.manufacturing_manager.list_manufacturing_ids()
     }
 }
 
@@ -1909,5 +2045,530 @@ mod tests {
 
         let ids = manager.list_quote_ids().unwrap();
         assert_eq!(ids.len(), 3);
+    }
+
+    // ============================================================================
+    // Verification Tests
+    // ============================================================================
+
+    #[test]
+    fn test_create_verification() {
+        let (_temp, manager) = create_test_manager();
+
+        let test_steps = vec![
+            TestStep {
+                step_number: 1,
+                description: "Power on device".to_string(),
+                expected_result: "LED turns green".to_string(),
+                actual_result: None,
+                passed: None,
+            },
+        ];
+
+        let verification = manager
+            .create_verification(
+                "VER-001".to_string(),
+                "Power-on test".to_string(),
+                "Functional Test".to_string(),
+                test_steps,
+                vec!["Device powers on successfully".to_string()],
+                TestPriority::High,
+            )
+            .unwrap();
+
+        assert_eq!(verification.name, "VER-001");
+        assert_eq!(verification.test_type, "Functional Test");
+        assert_eq!(verification.priority, TestPriority::High);
+        assert_eq!(verification.metadata.entity_type, EntityType::Verification);
+    }
+
+    #[test]
+    fn test_create_verification_validation_empty_name() {
+        let (_temp, manager) = create_test_manager();
+
+        let result = manager.create_verification(
+            "  ".to_string(),
+            "Description".to_string(),
+            "Test Type".to_string(),
+            vec![],
+            vec!["Criteria".to_string()],
+            TestPriority::Medium,
+        );
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), EdtError::ValidationError(_)));
+    }
+
+    #[test]
+    fn test_get_and_update_verification() {
+        let (_temp, manager) = create_test_manager();
+
+        let test_steps = vec![
+            TestStep {
+                step_number: 1,
+                description: "Test step".to_string(),
+                expected_result: "Pass".to_string(),
+                actual_result: None,
+                passed: None,
+            },
+        ];
+
+        let verification = manager
+            .create_verification(
+                "VER-002".to_string(),
+                "Test procedure".to_string(),
+                "Integration Test".to_string(),
+                test_steps,
+                vec!["All steps pass".to_string()],
+                TestPriority::Medium,
+            )
+            .unwrap();
+
+        let retrieved = manager.get_verification(&verification.metadata.id).unwrap();
+        assert_eq!(retrieved.name, "VER-002");
+
+        let mut updated = retrieved;
+        updated.executed_by = Some("Test Engineer".to_string());
+        updated.pass_fail = Some(true);
+
+        let saved = manager.update_verification(updated).unwrap();
+        assert_eq!(saved.executed_by, Some("Test Engineer".to_string()));
+        assert_eq!(saved.pass_fail, Some(true));
+    }
+
+    #[test]
+    fn test_delete_verification() {
+        let (_temp, manager) = create_test_manager();
+
+        let verification = manager
+            .create_verification(
+                "To Delete".to_string(),
+                "Description".to_string(),
+                "Test".to_string(),
+                vec![],
+                vec!["Criteria".to_string()],
+                TestPriority::Low,
+            )
+            .unwrap();
+
+        let id = verification.metadata.id;
+        manager.delete_verification(&id).unwrap();
+
+        let result = manager.get_verification(&id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_list_verification_ids() {
+        let (_temp, manager) = create_test_manager();
+
+        for i in 0..3 {
+            manager
+                .create_verification(
+                    format!("VER-{:03}", i),
+                    "Description".to_string(),
+                    "Test".to_string(),
+                    vec![],
+                    vec!["Criteria".to_string()],
+                    TestPriority::Medium,
+                )
+                .unwrap();
+        }
+
+        let ids = manager.list_verification_ids().unwrap();
+        assert_eq!(ids.len(), 3);
+    }
+
+    // ============================================================================
+    // Validation Tests
+    // ============================================================================
+
+    #[test]
+    fn test_create_validation() {
+        let (_temp, manager) = create_test_manager();
+
+        let validation = manager
+            .create_validation(
+                "VAL-001".to_string(),
+                "User acceptance testing".to_string(),
+                "UAT".to_string(),
+                vec!["User 1".to_string(), "User 2".to_string()],
+                vec!["Users can complete workflow".to_string()],
+                TestPriority::High,
+            )
+            .unwrap();
+
+        assert_eq!(validation.name, "VAL-001");
+        assert_eq!(validation.validation_type, "UAT");
+        assert_eq!(validation.participants.len(), 2);
+        assert_eq!(validation.priority, TestPriority::High);
+        assert_eq!(validation.metadata.entity_type, EntityType::Validation);
+    }
+
+    #[test]
+    fn test_create_validation_validation_empty_name() {
+        let (_temp, manager) = create_test_manager();
+
+        let result = manager.create_validation(
+            "".to_string(),
+            "Description".to_string(),
+            "Type".to_string(),
+            vec!["Participant".to_string()],
+            vec!["Criteria".to_string()],
+            TestPriority::Medium,
+        );
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), EdtError::ValidationError(_)));
+    }
+
+    #[test]
+    fn test_get_and_update_validation() {
+        let (_temp, manager) = create_test_manager();
+
+        let validation = manager
+            .create_validation(
+                "VAL-002".to_string(),
+                "Field testing".to_string(),
+                "Field Test".to_string(),
+                vec!["Tester 1".to_string()],
+                vec!["Device works in field".to_string()],
+                TestPriority::High,
+            )
+            .unwrap();
+
+        let retrieved = manager.get_validation(&validation.metadata.id).unwrap();
+        assert_eq!(retrieved.name, "VAL-002");
+
+        let mut updated = retrieved;
+        updated.approved = Some(true);
+        updated.approved_by = Some("Manager".to_string());
+        updated.user_feedback.push("Great experience".to_string());
+
+        let saved = manager.update_validation(updated).unwrap();
+        assert_eq!(saved.approved, Some(true));
+        assert_eq!(saved.approved_by, Some("Manager".to_string()));
+        assert_eq!(saved.user_feedback.len(), 1);
+    }
+
+    #[test]
+    fn test_delete_validation() {
+        let (_temp, manager) = create_test_manager();
+
+        let validation = manager
+            .create_validation(
+                "To Delete".to_string(),
+                "Description".to_string(),
+                "Type".to_string(),
+                vec!["Person".to_string()],
+                vec!["Criteria".to_string()],
+                TestPriority::Low,
+            )
+            .unwrap();
+
+        let id = validation.metadata.id;
+        manager.delete_validation(&id).unwrap();
+
+        let result = manager.get_validation(&id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_list_validation_ids() {
+        let (_temp, manager) = create_test_manager();
+
+        for i in 0..4 {
+            manager
+                .create_validation(
+                    format!("VAL-{:03}", i),
+                    "Description".to_string(),
+                    "Type".to_string(),
+                    vec!["Participant".to_string()],
+                    vec!["Criteria".to_string()],
+                    TestPriority::Medium,
+                )
+                .unwrap();
+        }
+
+        let ids = manager.list_validation_ids().unwrap();
+        assert_eq!(ids.len(), 4);
+    }
+
+    // ============================================================================
+    // Manufacturing Tests
+    // ============================================================================
+
+    #[test]
+    fn test_create_manufacturing() {
+        let (_temp, manager) = create_test_manager();
+
+        let work_instructions = vec![
+            WorkInstructionStep {
+                step_number: 1,
+                operation: "Cut material to length".to_string(),
+                description: "Use band saw to cut aluminum extrusion to specified length".to_string(),
+                tools_required: vec!["Band saw".to_string()],
+                estimated_time_minutes: Some(5.0),
+                safety_notes: vec!["Wear safety glasses".to_string()],
+                quality_checks: vec!["Verify length with caliper".to_string()],
+            },
+        ];
+
+        let manufacturing = manager
+            .create_manufacturing(
+                "MFG-001".to_string(),
+                "Assembly process".to_string(),
+                "Assembly".to_string(),
+                work_instructions,
+                1,
+            )
+            .unwrap();
+
+        assert_eq!(manufacturing.name, "MFG-001");
+        assert_eq!(manufacturing.process_type, "Assembly");
+        assert_eq!(manufacturing.priority, 1);
+        assert_eq!(manufacturing.work_instructions.len(), 1);
+        assert_eq!(manufacturing.metadata.entity_type, EntityType::Manufacturing);
+    }
+
+    #[test]
+    fn test_create_manufacturing_validation_empty_name() {
+        let (_temp, manager) = create_test_manager();
+
+        let result = manager.create_manufacturing(
+            "  ".to_string(),
+            "Description".to_string(),
+            "Type".to_string(),
+            vec![],
+            1,
+        );
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), EdtError::ValidationError(_)));
+    }
+
+    #[test]
+    fn test_get_and_update_manufacturing() {
+        let (_temp, manager) = create_test_manager();
+
+        let manufacturing = manager
+            .create_manufacturing(
+                "MFG-002".to_string(),
+                "Machining process".to_string(),
+                "CNC Machining".to_string(),
+                vec![],
+                2,
+            )
+            .unwrap();
+
+        let retrieved = manager.get_manufacturing(&manufacturing.metadata.id).unwrap();
+        assert_eq!(retrieved.name, "MFG-002");
+
+        let mut updated = retrieved;
+        updated.work_center = Some("Machine Shop A".to_string());
+        updated.operators.push("Operator 1".to_string());
+        updated.setup_time_minutes = Some(30.0);
+        updated.cycle_time_minutes = Some(15.0);
+
+        let saved = manager.update_manufacturing(updated).unwrap();
+        assert_eq!(saved.work_center, Some("Machine Shop A".to_string()));
+        assert_eq!(saved.operators.len(), 1);
+        assert_eq!(saved.setup_time_minutes, Some(30.0));
+    }
+
+    #[test]
+    fn test_delete_manufacturing() {
+        let (_temp, manager) = create_test_manager();
+
+        let manufacturing = manager
+            .create_manufacturing(
+                "To Delete".to_string(),
+                "Description".to_string(),
+                "Type".to_string(),
+                vec![],
+                1,
+            )
+            .unwrap();
+
+        let id = manufacturing.metadata.id;
+        manager.delete_manufacturing(&id).unwrap();
+
+        let result = manager.get_manufacturing(&id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_list_manufacturing_ids() {
+        let (_temp, manager) = create_test_manager();
+
+        for i in 0..3 {
+            manager
+                .create_manufacturing(
+                    format!("MFG-{:03}", i),
+                    "Description".to_string(),
+                    "Type".to_string(),
+                    vec![],
+                    1,
+                )
+                .unwrap();
+        }
+
+        let ids = manager.list_manufacturing_ids().unwrap();
+        assert_eq!(ids.len(), 3);
+    }
+
+    // ============================================================================
+    // Integration Tests for New Entities
+    // ============================================================================
+
+    #[test]
+    fn test_integration_verification_workflow() {
+        let (_temp, manager) = create_test_manager();
+
+        // Create test steps
+        let test_steps = vec![
+            TestStep {
+                step_number: 1,
+                description: "Apply power".to_string(),
+                expected_result: "Device turns on".to_string(),
+                actual_result: None,
+                passed: None,
+            },
+            TestStep {
+                step_number: 2,
+                description: "Check voltage".to_string(),
+                expected_result: "5V ± 0.1V".to_string(),
+                actual_result: None,
+                passed: None,
+            },
+        ];
+
+        // Create verification
+        let mut verification = manager
+            .create_verification(
+                "VER-INT-001".to_string(),
+                "Power supply verification".to_string(),
+                "Functional Test".to_string(),
+                test_steps,
+                vec![
+                    "Device powers on".to_string(),
+                    "Voltage within spec".to_string(),
+                ],
+                TestPriority::Critical,
+            )
+            .unwrap();
+
+        // Execute test
+        verification.test_steps[0].actual_result = Some("Device turned on".to_string());
+        verification.test_steps[0].passed = Some(true);
+        verification.test_steps[1].actual_result = Some("5.02V".to_string());
+        verification.test_steps[1].passed = Some(true);
+        verification.executed_by = Some("Test Engineer".to_string());
+        verification.pass_fail = Some(true);
+
+        let updated = manager.update_verification(verification).unwrap();
+
+        // Verify the results
+        assert_eq!(updated.pass_fail, Some(true));
+        assert_eq!(updated.test_steps.len(), 2);
+        assert_eq!(updated.test_steps[0].passed, Some(true));
+        assert_eq!(updated.test_steps[1].passed, Some(true));
+    }
+
+    #[test]
+    fn test_integration_validation_approval_workflow() {
+        let (_temp, manager) = create_test_manager();
+
+        // Create validation
+        let mut validation = manager
+            .create_validation(
+                "VAL-INT-001".to_string(),
+                "Customer acceptance testing".to_string(),
+                "Customer UAT".to_string(),
+                vec![
+                    "Customer A".to_string(),
+                    "Customer B".to_string(),
+                    "Internal QA".to_string(),
+                ],
+                vec![
+                    "All critical features work".to_string(),
+                    "Performance meets requirements".to_string(),
+                ],
+                TestPriority::Critical,
+            )
+            .unwrap();
+
+        // Add user feedback
+        validation.user_feedback.push("Easy to use".to_string());
+        validation.user_feedback.push("Meets all our needs".to_string());
+        validation.results_summary = Some("All participants satisfied".to_string());
+
+        // Approve
+        validation.approved = Some(true);
+        validation.approved_by = Some("Product Manager".to_string());
+
+        let final_validation = manager.update_validation(validation).unwrap();
+
+        // Verify approval workflow
+        assert_eq!(final_validation.approved, Some(true));
+        assert_eq!(final_validation.user_feedback.len(), 2);
+        assert!(final_validation.results_summary.is_some());
+    }
+
+    #[test]
+    fn test_integration_manufacturing_production_workflow() {
+        let (_temp, manager) = create_test_manager();
+
+        // Create manufacturing process with detailed work instructions
+        let work_instructions = vec![
+            WorkInstructionStep {
+                step_number: 1,
+                operation: "Load material into fixture".to_string(),
+                description: "Place workpiece into fixture and secure with clamps".to_string(),
+                tools_required: vec!["Fixture A".to_string()],
+                estimated_time_minutes: Some(2.0),
+                safety_notes: vec!["Ensure fixture is locked".to_string()],
+                quality_checks: vec!["Visual inspection of alignment".to_string()],
+            },
+            WorkInstructionStep {
+                step_number: 2,
+                operation: "Machine part to drawing spec".to_string(),
+                description: "Run CNC program to machine all features per drawing specifications".to_string(),
+                tools_required: vec!["CNC Mill".to_string(), "Cutting tools".to_string()],
+                estimated_time_minutes: Some(15.0),
+                safety_notes: vec!["Do not open door while running".to_string()],
+                quality_checks: vec![
+                    "Measure critical dimensions".to_string(),
+                    "Check surface finish".to_string(),
+                ],
+            },
+        ];
+
+        let mut manufacturing = manager
+            .create_manufacturing(
+                "MFG-INT-001".to_string(),
+                "Part production process".to_string(),
+                "CNC Machining".to_string(),
+                work_instructions,
+                1,
+            )
+            .unwrap();
+
+        // Set up production details
+        manufacturing.work_center = Some("CNC Area 1".to_string());
+        manufacturing.equipment_required = vec!["CNC Mill #3".to_string()];
+        manufacturing.operators = vec!["Operator Smith".to_string()];
+        manufacturing.setup_time_minutes = Some(30.0);
+        manufacturing.cycle_time_minutes = Some(17.0);
+        manufacturing.materials_required = vec!["Aluminum 6061 - 2x4x6".to_string()];
+
+        let updated = manager.update_manufacturing(manufacturing).unwrap();
+
+        // Verify the complete setup
+        assert_eq!(updated.work_instructions.len(), 2);
+        assert_eq!(updated.operators.len(), 1);
+        assert_eq!(updated.equipment_required.len(), 1);
+        assert_eq!(updated.setup_time_minutes, Some(30.0));
+        assert_eq!(updated.cycle_time_minutes, Some(17.0));
     }
 }

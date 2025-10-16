@@ -5,6 +5,7 @@ use crate::core::EdtResult;
 use crate::models::{
     EntityType, Task, Requirement, Risk, Hazard, RiskControl, Milestone, Resource, Calendar, Baseline,
     Assembly, Component, Feature, Mate, Stackup, Supplier, Quote,
+    Verification, Validation, Manufacturing,
 };
 
 /// RON file storage for entities
@@ -314,6 +315,57 @@ impl RonStorage {
         let content = fs::read_to_string(path)?;
         let quote: Quote = ron::from_str(&content)?;
         Ok(quote)
+    }
+
+    /// Write a Verification entity
+    pub fn write_verification(&self, verification: &Verification) -> EdtResult<()> {
+        self.ensure_entity_dir(&verification.metadata.entity_type)?;
+        let path = self.get_entity_path(&verification.metadata.entity_type, &verification.metadata.id);
+        let serialized = ron::ser::to_string_pretty(verification, ron::ser::PrettyConfig::default())?;
+        fs::write(path, serialized)?;
+        Ok(())
+    }
+
+    /// Read a Verification entity
+    pub fn read_verification(&self, entity_id: &Uuid) -> EdtResult<Verification> {
+        let path = self.get_entity_path(&EntityType::Verification, entity_id);
+        let content = fs::read_to_string(path)?;
+        let verification: Verification = ron::from_str(&content)?;
+        Ok(verification)
+    }
+
+    /// Write a Validation entity
+    pub fn write_validation(&self, validation: &Validation) -> EdtResult<()> {
+        self.ensure_entity_dir(&validation.metadata.entity_type)?;
+        let path = self.get_entity_path(&validation.metadata.entity_type, &validation.metadata.id);
+        let serialized = ron::ser::to_string_pretty(validation, ron::ser::PrettyConfig::default())?;
+        fs::write(path, serialized)?;
+        Ok(())
+    }
+
+    /// Read a Validation entity
+    pub fn read_validation(&self, entity_id: &Uuid) -> EdtResult<Validation> {
+        let path = self.get_entity_path(&EntityType::Validation, entity_id);
+        let content = fs::read_to_string(path)?;
+        let validation: Validation = ron::from_str(&content)?;
+        Ok(validation)
+    }
+
+    /// Write a Manufacturing entity
+    pub fn write_manufacturing(&self, manufacturing: &Manufacturing) -> EdtResult<()> {
+        self.ensure_entity_dir(&manufacturing.metadata.entity_type)?;
+        let path = self.get_entity_path(&manufacturing.metadata.entity_type, &manufacturing.metadata.id);
+        let serialized = ron::ser::to_string_pretty(manufacturing, ron::ser::PrettyConfig::default())?;
+        fs::write(path, serialized)?;
+        Ok(())
+    }
+
+    /// Read a Manufacturing entity
+    pub fn read_manufacturing(&self, entity_id: &Uuid) -> EdtResult<Manufacturing> {
+        let path = self.get_entity_path(&EntityType::Manufacturing, entity_id);
+        let content = fs::read_to_string(path)?;
+        let manufacturing: Manufacturing = ron::from_str(&content)?;
+        Ok(manufacturing)
     }
 
     /// Delete an entity file
@@ -900,5 +952,146 @@ mod tests {
         let read_quote = storage.read_quote(&quote_id).unwrap();
         assert_eq!(read_quote.quote_number, "Q-2025-001");
         assert_eq!(read_quote.quantity_price_pairs.len(), 3);
+    }
+
+    #[test]
+    fn test_write_and_read_verification() {
+        use crate::models::{Verification, TestStatus, TestPriority, TestStep};
+
+        let (_temp, storage) = create_test_storage();
+
+        let metadata = EntityMetadata::new(EntityType::Verification);
+        let verification_id = metadata.id;
+
+        let verification = Verification {
+            metadata,
+            name: "VER-001: Voltage Test".to_string(),
+            description: "Test power supply voltage".to_string(),
+            notes: None,
+            test_type: "System Test".to_string(),
+            test_procedure: Some("TP-001".to_string()),
+            test_steps: vec![
+                TestStep {
+                    step_number: 1,
+                    description: "Power on".to_string(),
+                    expected_result: "5V output".to_string(),
+                    actual_result: None,
+                    passed: None,
+                },
+            ],
+            acceptance_criteria: vec!["5V ±0.1V".to_string()],
+            status: TestStatus::NotStarted,
+            priority: TestPriority::Critical,
+            executed_by: None,
+            executed_at: None,
+            execution_time_seconds: None,
+            actual_result: None,
+            pass_fail: None,
+            defects_found: vec![],
+        };
+
+        storage.write_verification(&verification).unwrap();
+        assert!(storage.exists(&EntityType::Verification, &verification_id));
+
+        let read_verification = storage.read_verification(&verification_id).unwrap();
+        assert_eq!(read_verification.name, "VER-001: Voltage Test");
+        assert_eq!(read_verification.status, TestStatus::NotStarted);
+        assert_eq!(read_verification.test_steps.len(), 1);
+    }
+
+    #[test]
+    fn test_write_and_read_validation() {
+        use crate::models::{Validation, TestStatus, TestPriority};
+
+        let (_temp, storage) = create_test_storage();
+
+        let metadata = EntityMetadata::new(EntityType::Validation);
+        let validation_id = metadata.id;
+
+        let validation = Validation {
+            metadata,
+            name: "VAL-001: User Acceptance Test".to_string(),
+            description: "Validate system meets user needs".to_string(),
+            notes: None,
+            validation_type: "UAT".to_string(),
+            protocol: Some("VAL-PROTOCOL-001".to_string()),
+            participants: vec!["User A".to_string(), "User B".to_string()],
+            environment: Some("Production-like environment".to_string()),
+            status: TestStatus::InProgress,
+            priority: TestPriority::High,
+            start_date: Some(Utc::now()),
+            end_date: None,
+            success_criteria: vec!["80% task completion".to_string()],
+            results_summary: None,
+            user_feedback: vec![],
+            issues_identified: vec![],
+            approved: None,
+            approved_by: None,
+            approved_at: None,
+        };
+
+        storage.write_validation(&validation).unwrap();
+        assert!(storage.exists(&EntityType::Validation, &validation_id));
+
+        let read_validation = storage.read_validation(&validation_id).unwrap();
+        assert_eq!(read_validation.name, "VAL-001: User Acceptance Test");
+        assert_eq!(read_validation.status, TestStatus::InProgress);
+        assert_eq!(read_validation.participants.len(), 2);
+    }
+
+    #[test]
+    fn test_write_and_read_manufacturing() {
+        use crate::models::{Manufacturing, ProcessStatus, QualityCheckpoint, QualityStatus, WorkInstructionStep};
+
+        let (_temp, storage) = create_test_storage();
+
+        let metadata = EntityMetadata::new(EntityType::Manufacturing);
+        let manufacturing_id = metadata.id;
+
+        let manufacturing = Manufacturing {
+            metadata,
+            name: "MFG-001: Bracket Assembly".to_string(),
+            description: "Assembly process for mounting bracket".to_string(),
+            notes: None,
+            process_type: "Assembly".to_string(),
+            work_center: Some("Assembly Line 1".to_string()),
+            equipment_required: vec!["Torque wrench".to_string()],
+            work_instructions: vec![
+                WorkInstructionStep {
+                    step_number: 1,
+                    operation: "Position base".to_string(),
+                    description: "Place base plate in fixture".to_string(),
+                    tools_required: vec![],
+                    estimated_time_minutes: Some(2.0),
+                    safety_notes: vec![],
+                    quality_checks: vec![],
+                },
+            ],
+            status: ProcessStatus::Planned,
+            priority: 1,
+            planned_start: None,
+            planned_end: None,
+            actual_start: None,
+            actual_end: None,
+            operators: vec![],
+            setup_time_minutes: Some(30.0),
+            cycle_time_minutes: Some(7.0),
+            batches: vec![],
+            quality_checkpoints: vec![],
+            materials_required: vec!["Base plate".to_string()],
+            material_lot_numbers: vec![],
+            drawings: vec!["DWG-001".to_string()],
+            specifications: vec![],
+            deviations: vec![],
+            nonconformances: vec![],
+        };
+
+        storage.write_manufacturing(&manufacturing).unwrap();
+        assert!(storage.exists(&EntityType::Manufacturing, &manufacturing_id));
+
+        let read_manufacturing = storage.read_manufacturing(&manufacturing_id).unwrap();
+        assert_eq!(read_manufacturing.name, "MFG-001: Bracket Assembly");
+        assert_eq!(read_manufacturing.status, ProcessStatus::Planned);
+        assert_eq!(read_manufacturing.work_instructions.len(), 1);
     }
 }

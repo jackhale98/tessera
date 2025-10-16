@@ -73,4 +73,9 @@ impl RequirementManager {
         }
         self.storage.delete(&EntityType::Requirement, id)
     }
+
+    /// List all Requirement IDs
+    pub fn list_requirement_ids(&self) -> EdtResult<Vec<Uuid>> {
+        self.storage.list_ids(&EntityType::Requirement)
+    }
 }

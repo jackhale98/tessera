@@ -23,6 +23,11 @@ use commands::{
     create_stackup, get_stackup, update_stackup, delete_stackup, list_stackups,
     create_supplier, get_supplier, update_supplier, delete_supplier, list_suppliers,
     create_quote, get_quote, update_quote, delete_quote, list_quotes,
+    create_verification, get_verification, update_verification, delete_verification, list_verifications,
+    create_validation, get_validation, update_validation, delete_validation, list_validations,
+    create_manufacturing, get_manufacturing, update_manufacturing, delete_manufacturing, list_manufacturing,
+    create_requirement, get_requirement, update_requirement, delete_requirement, list_requirements,
+    create_risk, get_risk, update_risk, delete_risk, list_risks,
 };
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -133,6 +138,36 @@ pub fn run() {
             update_quote,
             delete_quote,
             list_quotes,
+            // Verification commands
+            create_verification,
+            get_verification,
+            update_verification,
+            delete_verification,
+            list_verifications,
+            // Validation commands
+            create_validation,
+            get_validation,
+            update_validation,
+            delete_validation,
+            list_validations,
+            // Manufacturing commands
+            create_manufacturing,
+            get_manufacturing,
+            update_manufacturing,
+            delete_manufacturing,
+            list_manufacturing,
+            // Requirement commands
+            create_requirement,
+            get_requirement,
+            update_requirement,
+            delete_requirement,
+            list_requirements,
+            // Risk commands
+            create_risk,
+            get_risk,
+            update_risk,
+            delete_risk,
+            list_risks,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

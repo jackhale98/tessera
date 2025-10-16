@@ -6,6 +6,11 @@ pub mod calendar_commands;
 pub mod baseline_commands;
 pub mod calculation_commands;
 pub mod design_commands;
+pub mod verification_commands;
+pub mod validation_commands;
+pub mod manufacturing_commands;
+pub mod requirement_commands;
+pub mod risk_commands;
 
 pub use task_commands::{create_task, get_task, update_task, delete_task, list_tasks};
 pub use milestone_commands::{create_milestone, get_milestone, update_milestone, delete_milestone, list_milestones};
@@ -25,4 +30,19 @@ pub use design_commands::{
     create_stackup, get_stackup, update_stackup, delete_stackup, list_stackups,
     create_supplier, get_supplier, update_supplier, delete_supplier, list_suppliers,
     create_quote, get_quote, update_quote, delete_quote, list_quotes,
+};
+pub use verification_commands::{
+    create_verification, get_verification, update_verification, delete_verification, list_verifications,
+};
+pub use validation_commands::{
+    create_validation, get_validation, update_validation, delete_validation, list_validations,
+};
+pub use manufacturing_commands::{
+    create_manufacturing, get_manufacturing, update_manufacturing, delete_manufacturing, list_manufacturing,
+};
+pub use requirement_commands::{
+    create_requirement, get_requirement, update_requirement, delete_requirement, list_requirements,
+};
+pub use risk_commands::{
+    create_risk, get_risk, update_risk, delete_risk, list_risks,
 };

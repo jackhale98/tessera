@@ -6,6 +6,8 @@ pub mod risk;
 pub mod link;
 pub mod config;
 pub mod design;
+pub mod testing;
+pub mod manufacturing;
 
 pub use entity::{EntityMetadata, EntityStatus, EntityType};
 pub use task::{
@@ -24,4 +26,11 @@ pub use design::{
     ContributionSign, StackupFeatureContribution,
     Supplier, Quote, CostDistribution,
     BomItem, BomResult, CostEstimate,
+};
+pub use testing::{
+    Verification, Validation, TestStatus, TestPriority, TestStep,
+};
+pub use manufacturing::{
+    Manufacturing, ProcessStatus, QualityStatus,
+    WorkInstructionStep, QualityCheckpoint, ProductionBatch,
 };

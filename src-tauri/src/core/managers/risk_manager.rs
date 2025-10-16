@@ -73,4 +73,17 @@ impl RiskManager {
 
         Ok(updated)
     }
+
+    /// Delete a Risk
+    pub fn delete_risk(&self, id: &Uuid) -> EdtResult<()> {
+        if !self.storage.exists(&EntityType::Risk, id) {
+            return Err(EdtError::EntityNotFound(id.to_string()));
+        }
+        self.storage.delete(&EntityType::Risk, id)
+    }
+
+    /// List all Risk IDs
+    pub fn list_risk_ids(&self) -> EdtResult<Vec<Uuid>> {
+        self.storage.list_ids(&EntityType::Risk)
+    }
 }
