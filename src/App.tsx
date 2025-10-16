@@ -1,50 +1,61 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { useState } from 'react';
+import { Layout } from './components/layout/Layout';
+import { TopBar } from './components/layout/TopBar';
+import { Dashboard } from './components/views/Dashboard';
+import { ModuleView } from './components/views/ModuleView';
+import { CreateEntityModal } from './components/views/CreateEntityModal';
+import { useUIStore } from './stores/useUIStore';
+
+const moduleNames: Record<string, string> = {
+  dashboard: 'Dashboard',
+  project: 'Project Management',
+  requirements: 'Requirements',
+  risks: 'Risk Management',
+  design: 'Design & BOM',
+  verification: 'V&V',
+  manufacturing: 'Manufacturing',
+};
+
+const moduleEntityTypes: Record<string, 'task' | 'requirement' | 'risk'> = {
+  project: 'task',
+  requirements: 'requirement',
+  risks: 'risk',
+};
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const { activeModule } = useUIStore();
+  const title = moduleNames[activeModule] || 'Tessera';
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  const handleNewEntity = () => {
+    setIsCreateModalOpen(true);
+  };
+
+  const entityType = moduleEntityTypes[activeModule] || null;
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <Layout>
+      <TopBar
+        title={title}
+        onNewEntity={activeModule !== 'dashboard' ? handleNewEntity : undefined}
+      />
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+      <div className="flex-1 overflow-auto">
+        {activeModule === 'dashboard' && <Dashboard />}
+        {activeModule === 'project' && <ModuleView module="project" />}
+        {activeModule === 'requirements' && <ModuleView module="requirements" />}
+        {activeModule === 'risks' && <ModuleView module="risks" />}
+        {activeModule === 'design' && <ModuleView module="design" />}
+        {activeModule === 'verification' && <ModuleView module="verification" />}
+        {activeModule === 'manufacturing' && <ModuleView module="manufacturing" />}
       </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+      <CreateEntityModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        entityType={entityType}
+      />
+    </Layout>
   );
 }
 

@@ -28,6 +28,8 @@ use commands::{
     create_manufacturing, get_manufacturing, update_manufacturing, delete_manufacturing, list_manufacturing,
     create_requirement, get_requirement, update_requirement, delete_requirement, list_requirements,
     create_risk, get_risk, update_risk, delete_risk, list_risks,
+    create_hazard, get_hazard, update_hazard, delete_hazard, list_hazards,
+    create_risk_control, get_risk_control, update_risk_control, delete_risk_control, list_risk_controls,
 };
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -168,6 +170,18 @@ pub fn run() {
             update_risk,
             delete_risk,
             list_risks,
+            // Hazard commands
+            create_hazard,
+            get_hazard,
+            update_hazard,
+            delete_hazard,
+            list_hazards,
+            // RiskControl commands
+            create_risk_control,
+            get_risk_control,
+            update_risk_control,
+            delete_risk_control,
+            list_risk_controls,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

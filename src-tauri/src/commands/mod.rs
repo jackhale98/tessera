@@ -11,6 +11,8 @@ pub mod validation_commands;
 pub mod manufacturing_commands;
 pub mod requirement_commands;
 pub mod risk_commands;
+pub mod hazard_commands;
+pub mod risk_control_commands;
 
 pub use task_commands::{create_task, get_task, update_task, delete_task, list_tasks};
 pub use milestone_commands::{create_milestone, get_milestone, update_milestone, delete_milestone, list_milestones};
@@ -45,4 +47,10 @@ pub use requirement_commands::{
 };
 pub use risk_commands::{
     create_risk, get_risk, update_risk, delete_risk, list_risks,
+};
+pub use hazard_commands::{
+    create_hazard, get_hazard, update_hazard, delete_hazard, list_hazards,
+};
+pub use risk_control_commands::{
+    create_risk_control, get_risk_control, update_risk_control, delete_risk_control, list_risk_controls,
 };

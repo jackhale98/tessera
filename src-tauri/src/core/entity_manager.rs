@@ -3,7 +3,7 @@ use uuid::Uuid;
 use crate::core::{EdtResult, EdtError};
 use crate::storage::RonStorage;
 use crate::models::{
-    EntityType, EntityMetadata, Task, Requirement, Risk,
+    EntityType, EntityMetadata, Task, Requirement, Risk, Hazard, RiskControl,
     Milestone, Resource, TaskType, ResourceType, Calendar, Baseline,
     Assembly, Component, Feature, FeatureType, DistributionType,
     Mate, MateType, Stackup, AnalysisType, Supplier, Quote, CostDistribution,
@@ -230,6 +230,65 @@ impl EntityManager {
 
     pub fn list_risk_ids(&self) -> EdtResult<Vec<Uuid>> {
         self.risk_manager.list_risk_ids()
+    }
+
+    // ============================================================================
+    // Hazard Methods (delegate to RiskManager)
+    // ============================================================================
+
+    pub fn create_hazard(
+        &self,
+        name: String,
+        description: String,
+        causes: Vec<String>,
+        harms: Vec<String>,
+    ) -> EdtResult<Hazard> {
+        self.risk_manager.create_hazard(name, description, causes, harms)
+    }
+
+    pub fn get_hazard(&self, id: &Uuid) -> EdtResult<Hazard> {
+        self.risk_manager.get_hazard(id)
+    }
+
+    pub fn update_hazard(&self, hazard: Hazard) -> EdtResult<Hazard> {
+        self.risk_manager.update_hazard(hazard)
+    }
+
+    pub fn delete_hazard(&self, id: &Uuid) -> EdtResult<()> {
+        self.risk_manager.delete_hazard(id)
+    }
+
+    pub fn list_hazard_ids(&self) -> EdtResult<Vec<Uuid>> {
+        self.risk_manager.list_hazard_ids()
+    }
+
+    // ============================================================================
+    // RiskControl Methods (delegate to RiskManager)
+    // ============================================================================
+
+    pub fn create_risk_control(
+        &self,
+        name: String,
+        description: String,
+        control_type: String,
+    ) -> EdtResult<RiskControl> {
+        self.risk_manager.create_risk_control(name, description, control_type)
+    }
+
+    pub fn get_risk_control(&self, id: &Uuid) -> EdtResult<RiskControl> {
+        self.risk_manager.get_risk_control(id)
+    }
+
+    pub fn update_risk_control(&self, control: RiskControl) -> EdtResult<RiskControl> {
+        self.risk_manager.update_risk_control(control)
+    }
+
+    pub fn delete_risk_control(&self, id: &Uuid) -> EdtResult<()> {
+        self.risk_manager.delete_risk_control(id)
+    }
+
+    pub fn list_risk_control_ids(&self) -> EdtResult<Vec<Uuid>> {
+        self.risk_manager.list_risk_control_ids()
     }
 
     // ============================================================================
